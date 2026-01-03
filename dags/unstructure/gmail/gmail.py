@@ -1,98 +1,99 @@
 """
 Module: Gmail Data Pipeline DAG
-Purpose: Orchestrates the end-to-end extraction process for Gmail data. 
-It retrieves credentials from Airflow, loads configuration from YAML, 
-and uses specialized Factories to connect to and extract data from Gmail.
+Purpose: Orchestrates Gmail data flow through Credentials, Extraction, and Transformation.
 """
 
-import json
-from typing import Any, Dict
+import warnings
+
+# Filter out the specific Airflow deprecation warnings coming from skops
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="skops")
+warnings.filterwarnings("ignore", message="The `airflow.utils.*` attribute is deprecated")
+
 from airflow import DAG
 from datetime import datetime, timedelta
 from airflow.providers.standard.operators.python import PythonOperator
+from typing import Any, Dict, List
 
-# Architecture imports
 from src.custom.credentials.factory import CredentialFactory
 from src.custom.connectors.factory import ConnectorFactory
 from src.custom.extractors.factory import ExtractorFactory
+from src.custom.transformers.factory import TransformerFactory
 from src.custom.utils.reader import load_yml, load_pickle
 
-def credentials(**kwargs: Any) -> Dict[str, Any]:
-    """
-    Purpose: Retrieves Gmail API credentials using the Credential Factory.
+def credentials_task(**kwargs: Any) -> Dict[str, Any]:
+    """Retrieves credentials from the Airflow connection."""
+    return CredentialFactory.get_provider(mode="airflow", conn_id="gmail").get_credentials()
+
+def extraction_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
+    """Connects to Gmail and extracts raw email records."""
+    # 1. Setup Authentication in memory
+    creds = ti.xcom_pull(task_ids='get_credentials')
+    if not creds:
+        raise ValueError("No credentials received from previous task.")
     
-    Args:
-        **kwargs: Airflow task context.
-        
-    Returns:
-        Dict[str, Any]: A dictionary containing credential metadata (like token_path).
-    """
-    provider = CredentialFactory.get_provider(mode="airflow", conn_id="gmail")
-    return provider.get_credentials()
-
-def extraction(ti: Any, **kwargs: Any) -> None:
-    """
-    Purpose: Performs the data extraction in a secure, zero-disk manner.
-    It pulls credentials from XCom, loads the token into memory, 
-    and iterates through extracted Gmail records.
+    creds['token_dict'] = load_pickle(creds['token_path'])
     
-    Args:
-        ti: Airflow Task Instance (used for XCom pull).
-        **kwargs: Airflow task context.
-    """
-    # 1. Pull credentials from the previous task
-    creds: Dict[str, Any] = ti.xcom_pull(task_ids='credential_task')
-    if not creds or 'token_path' not in creds:
-        raise KeyError("Missing 'token_path' in credentials.")
-
-    # 2. Zero-Disk: Load the token dictionary directly into RAM
-    token_dict: Dict[str, Any] = load_pickle(creds['token_path'])
-    creds['token_dict'] = token_dict
+    # 2. Load Extraction Config
+    full_config = load_yml("dags/unstructure/gmail/config/extractor.yml")
+    gmail_config = full_config.get('gmail_pipeline', {})
     
-    # 3. Load Extractor Configuration from YAML
-    full_yml: Dict[str, Any] = load_yml("dags/unstructure/gmail/config/extractor.yml")
-    extractor_config: Dict[str, Any] = full_yml.get('gmail_pipeline', {}).get('extraction', {})
+    # 3. Connect and Extract
+    connector = ConnectorFactory.get_connector(connector_type="gmail", config=creds)
+    service = connector()
+    extractor = ExtractorFactory.get_extractor("gmail", service, gmail_config.get('extraction'))
+    
+    # 4. Return list to XCom (Caution: Ensure batch_size is small)
+    return list(extractor.extract())
 
-    # 4. Initialize Connector (In-Memory Auth)
-    connector_obj = ConnectorFactory.get_connector(connector_type="gmail", config=creds)
-    service = connector_obj()
-
-    # 5. Initialize Extractor and process records
-    extractor = ExtractorFactory.get_extractor(
-        extractor_type="gmail", 
-        connection=service, 
-        config=extractor_config
+def transformation_task(ti: Any, **kwargs: Any) -> None:
+    # 1. Get the data
+    raw_records = ti.xcom_pull(task_ids='extract_gmail_data')
+    
+    # 2. Get the config
+    full_config = load_yml("dags/unstructure/gmail/config/extractor.yml")
+    trans_config = full_config.get('gmail_pipeline', {}).get('transformation', {})
+    
+    # 3. Pass ALL THREE to the factory
+    transformer = TransformerFactory.get_transformer(
+        transformer_type="document", 
+        data=raw_records,  # Pass the data here!
+        config=trans_config
     )
+    
+    # 4. Execute
+    for chunk in transformer(): # No need to pass record here anymore
+        print(f"Ready for Loader: {chunk}")
 
-    for record in extractor.extract():
-        # Print full JSON record to Airflow logs for visibility
-        print(f"Extracted Record: {json.dumps(record)}")
+# --- DAG Definition ---
 
-# --- DAG Configuration ---
-
-default_args: Dict[str, Any] = {
+default_args = {
     'owner': 'data_team',
     'retries': 0,
-    'retry_delay': timedelta(minutes=2)
+    'retry_delay': timedelta(minutes=5)
 }
 
 with DAG(
-    'gmail_data_pipeline',
+    'gmail_data_pipeline', 
     default_args=default_args,
-    start_date=datetime(2025, 1, 1),
-    schedule="@daily",
+    start_date=datetime(2025, 1, 1), 
+    schedule="@daily", 
     catchup=False,
-    tags=["gmail"]
+    tags=["gmail", "txtai"]
 ) as dag:
 
-    credentials_task = PythonOperator(
-        task_id='credential_task',
-        python_callable=credentials,
+    credential = PythonOperator(
+        task_id='get_credentials', 
+        python_callable=credentials_task
+    )
+    
+    extraction = PythonOperator(
+        task_id='extract_gmail_data', 
+        python_callable=extraction_task
+    )
+    
+    transformation = PythonOperator(
+        task_id='transform_data', 
+        python_callable=transformation_task
     )
 
-    extraction_task = PythonOperator(
-        task_id='extraction_task',
-        python_callable=extraction,
-    )
-
-    credentials_task >> extraction_task
+    credential >> extraction >> transformation

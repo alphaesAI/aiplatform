@@ -2,12 +2,18 @@ gmail_pipeline:
   extraction:
     query: "is:unread"
     batch_size: 10
-    labels: 
-      - "INBOX"
     fields: 
       - "subject"
       - "from"
       - "date"
-    
-    mark_as_read: false
     extraction_mode: "full"
+
+  transformation:
+    index_name: "gmail_index"
+    textractor:
+      paragraphs: true
+      sections: true
+    segmentation:
+      sentences: true
+      minlength: 20
+      maxlength: 512

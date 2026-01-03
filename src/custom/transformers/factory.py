@@ -1,9 +1,17 @@
-from .json_transformer import JsonTransformer
-
 class TransformerFactory:
     @staticmethod
-    def get_transformer(transformer_type, data, config):
-        if transformer_type == "json":
-            return JsonTransformer(data=data, config=config)
+    def get_transformer(transformer_type: str, data: any, config: dict):
+        """
+        Purpose: Universal entry point for all transformations.
+        """
+        if transformer_type == "document":
+            
+            from .document import DocumentTransformer
+            return DocumentTransformer(data, config)
+        
+        elif transformer_type == "json":
+
+            from .json_transformer import JsonTransformer
+            return JsonTransformer(data, config)
         else:
-            raise ValueError(f"Transformer type {transformer_type} is not supported")
+            raise ValueError(f"Unknown type: {transformer_type}")
