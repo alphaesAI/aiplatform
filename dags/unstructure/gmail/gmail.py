@@ -1,6 +1,10 @@
 """
 Module: Gmail Data Pipeline DAG
-Purpose: Orchestrates Gmail data flow through Credentials, Extraction, and Transformation.
+Purpose: Orchestrates the end-to-end flow of Gmail data. 
+Steps: 
+1. Authenticates via Airflow Connections.
+2. Extracts raw email content (Body/Metadata/Attachments).
+3. Transforms and segments text into chunks for Vector Search.
 """
 
 import warnings
@@ -21,11 +25,24 @@ from src.custom.transformers.factory import TransformerFactory
 from src.custom.utils.reader import load_yml, load_pickle
 
 def credentials_task(**kwargs: Any) -> Dict[str, Any]:
-    """Retrieves credentials from the Airflow connection."""
+    """
+    Purpose: Retrieves Gmail API credentials from the Airflow metadata database.
+    
+    Returns:
+        Dict[str, Any]: A dictionary containing credentials and token paths.
+    """
     return CredentialFactory.get_provider(mode="airflow", conn_id="gmail").get_credentials()
 
 def extraction_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
-    """Connects to Gmail and extracts raw email records."""
+    """
+    Purpose: Connects to the Gmail service and pulls raw email data based on config filters.
+    
+    Args:
+        ti (Any): Airflow Task Instance used to pull credentials from XCom.
+        
+    Returns:
+        List[Dict[str, Any]]: A list of raw email records (body, metadata, ids).
+    """
     # 1. Setup Authentication in memory
     creds = ti.xcom_pull(task_ids='get_credentials')
     if not creds:
@@ -46,6 +63,12 @@ def extraction_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
     return list(extractor.extract())
 
 def transformation_task(ti: Any, **kwargs: Any) -> None:
+    """
+    Purpose: Uses the TransformerFactory to clean, segment, and chunk raw email text.
+    
+    Args:
+        ti (Any): Airflow Task Instance used to pull raw records from XCom.
+    """
     # 1. Get the data
     raw_records = ti.xcom_pull(task_ids='extract_gmail_data')
     
