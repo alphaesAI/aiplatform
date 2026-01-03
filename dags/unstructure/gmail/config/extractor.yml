@@ -1,0 +1,13 @@
+gmail_pipeline:
+  extraction:
+    query: "is:unread"
+    batch_size: 10
+    labels: 
+      - "INBOX"
+    fields: 
+      - "subject"
+      - "from"
+      - "date"
+    
+    mark_as_read: false
+    extraction_mode: "full"

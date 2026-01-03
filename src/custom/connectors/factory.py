@@ -1,5 +1,7 @@
 from .rdbms import RDBMSConnector
+from .gmail import GmailConnector
 from .elasticsearch import ESConnector
+from .opensearch import OpensearchConnector
 
 class ConnectorFactory:
     """
@@ -15,5 +17,9 @@ class ConnectorFactory:
         """
         if connector_type == "rdbms":
             return RDBMSConnector(config=config)
+        elif connector_type == "gmail":
+            return GmailConnector(config=config)
         elif connector_type == "elasticsearch":
             return ESConnector(config=config)
+        elif connector_type == "opensearch":
+            return OpensearchConnector(config=config)

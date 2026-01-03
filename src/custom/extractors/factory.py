@@ -1,4 +1,5 @@
 from .rdbms import RDBMSExtractor
+from .gmail import GmailExtractor
 
 class ExtractorFactory:
     @staticmethod
