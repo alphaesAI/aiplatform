@@ -11,12 +11,10 @@ class GmailConnector:
 
     def connect(self):
         if not self._service:
-            token_path = self.config.get("token_path")
-            if not token_path:
-                raise ValueError("token_path is missing from connector config")
-                
-            creds = Credentials.from_authorized_user_file(
-                token_path, 
+            token_info = self.config.get("token_dict")
+            
+            creds = Credentials.from_authorized_user_info(
+                token_info,
                 scopes=['https://www.googleapis.com/auth/gmail.readonly']
             )
             self._service = build('gmail', 'v1', credentials=creds, cache_discovery=False)
