@@ -4,83 +4,79 @@ from typing import Optional, Dict
 
 logger = logging.getLogger(__name__)
 
+"""
+arxiv.py
+====================================
+Purpose:
+    Handles asynchronous HTTP connections to the Arxiv API using httpx.
+"""
+
 class ArxivConnector:
     """
-    Infrastructure Layer - Arxiv HTTP Connector
-
-    Responsible only for:
-    - Creating reusable async HTTP connection
-    - Managing client lifecycle
-    - Returning connection object to services
+    Purpose:
+        Responsible for managing the lifecycle of an AsyncClient for 
+        efficient, persistent HTTP requests to Arxiv.
     """
 
-    def __init__(self, config: Dict[str, str]):
+    def __init__(self, config: Dict[str, Any]):
         """
-        Initialize ArxivConnector.
+        Purpose:
+            Initialize ArxivConnector settings.
 
         Args:
-            config (Dict):
-                Required keys:
-                    base_url (str): Arxiv API endpoint
-                    timeout_seconds (int): HTTP timeout in seconds
+            config (Dict): 
+                'base_url' (str): API endpoint.
+                'timeout_seconds' (int): Request timeout.
         """
-        self.base_url = config["base_url"]
-        self.timeout = config["timeout_seconds"]
+        self.base_url = config.get("base_url")
+        self.timeout = config.get("timeout_seconds", 10)
         self._client: Optional[httpx.AsyncClient] = None
 
-        logger.info(
-            "ArxivConnector initialized | base_url=%s timeout=%ss",
-            self.base_url,
-            self.timeout
-        )
+        logger.info(f"ArxivConnector initialized for {self.base_url}")
 
     async def __call__(self) -> httpx.AsyncClient:
         """
-        Callable version of connect().
-
-        Allows writing:
-            client = await connector()
+        Purpose:
+            Allows async access to the connector to retrieve the HTTP client.
 
         Returns:
-            httpx.AsyncClient
+            httpx.AsyncClient: The active async client.
         """
         return await self.connect()
 
     async def connect(self) -> httpx.AsyncClient:
         """
-        Creates (if needed) and returns async HTTP client.
+        Purpose:
+            Creates or reuses an httpx.AsyncClient for persistent sessions.
 
-        This method ensures:
-        - Reusable persistent connection
-        - Lazy initialization
-        - Centralized client management
+        Args:
+            None
 
         Returns:
-            httpx.AsyncClient: Active HTTP client instance
+            httpx.AsyncClient: Active HTTP client instance.
         """
         if self._client is None:
-            logger.info("Creating new HTTP client session for Arxiv")
+            logger.info("Creating new HTTP client session for Arxiv.")
             self._client = httpx.AsyncClient(timeout=self.timeout)
-
         else:
-            logger.debug("Reusing existing Arxiv HTTP client session")
+            logger.debug("Reusing existing Arxiv HTTP client session.")
         
         return self._client
 
     async def close(self):
         """
-        Gracefully closes HTTP connection.
+        Purpose:
+            Gracefully shuts down the async client and releases resources.
 
-        When to use:
-        - Application shutdown
-        - Airflow teardown
-        - Service cleanup
+        Args:
+            None
+            
+        Returns:
+            None
         """
         if self._client:
-
-            logger.info("Closing Arxiv HTTP client session")
+            logger.info("Closing Arxiv HTTP client session.")
             await self._client.aclose()
             self._client = None
-        
         else:
-            logger.debug("Close called but no HTTP client session exists")
+            logger.debug("Close called but no HTTP client session exists.")

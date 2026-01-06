@@ -1,25 +1,64 @@
+import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
-from ..credentials.factory import CredentialFactory
+
+logger = logging.getLogger(__name__)
+
+"""
+rdbms.py
+====================================
+Purpose:
+    Provides a connector for Relational Database Management Systems using SQLAlchemy.
+    Supports dynamic URL generation based on the provided database type/driver.
+"""
 
 class RDBMSConnector:
-    def __init__(self, config):
+    """
+    Purpose:
+        Manages the lifecycle of a SQLAlchemy engine and connection.
+        Handles credentials and connection testing for various SQL databases.
+    """
+
+    def __init__(self, config: dict):
         """
-        Initializes the connector by fetching credentials internally.
+        Purpose:
+            Initializes the RDBMSConnector with database configuration.
+
+        Args:
+            config (dict): Database parameters including 'db_type', 'user', 
+                          'password', 'host', 'port', and 'database'.
         """
         self.config = config
         self._engine = None
         self._connection = None
+        logger.debug("RDBMSConnector initialized for host: %s", config.get("host"))
 
     def __call__(self):
+        """
+        Purpose:
+            Enables the instance to be called to establish and return a connection.
+
+        Returns:
+            sqlalchemy.engine.Connection: An active database connection.
+        """
         self.connect()
         return self._connection
 
     def connect(self) -> None:
-        """ Create SQLAlchemy engine and test connection. """
-        
-        # Extract basic URL parts from the dictionary
-        # Note: mapping 'user' from dict to 'username' for SQLAlchemy URL
+        """
+        Purpose:
+            Constructs a SQLAlchemy URL, creates the engine, and verifies 
+            the connectivity by executing a 'SELECT 1' test query.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            Exception: If the database connection or test query fails.
+        """
         url_params = {
             "drivername": self.config.get("db_type") or self.config.get("type"),
             "username": self.config.get("user"),
@@ -29,14 +68,19 @@ class RDBMSConnector:
             "database": self.config.get("database"),
         }
 
-        # Create the connection URL (filtering out None values)
         connection_url = URL.create(**{k: v for k, v in url_params.items() if v is not None})
-
-        # 4. Create Engine
-        self._engine = create_engine(connection_url)
         
-        # 5. Test Connection
-        with self._engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+        logger.info(f"Connecting to database: {url_params['database']} at {url_params['host']}")
         
-        self._connection = self._engine.connect()
+        try:
+            self._engine = create_engine(connection_url)
+            
+            # Test Connection
+            with self._engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            
+            self._connection = self._engine.connect()
+            logger.info("RDBMS connection established and verified.")
+        except Exception as e:
+            logger.exception("Failed to establish RDBMS connection.")
+            raise

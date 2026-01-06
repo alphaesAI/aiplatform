@@ -1,26 +1,35 @@
-"""
-Module: Base Transformer
-Purpose: Provides a foundation for all transformer classes. It contains 
-the shared logic for data type cleaning and Elasticsearch-style formatting.
-"""
-
+import logging
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Dict, Any, Union
 
+logger = logging.getLogger(__name__)
+
+"""
+base.py
+====================================
+Purpose:
+    Provides a foundation for all transformer classes. It contains 
+    the shared logic for data type cleaning and Elasticsearch-style formatting.
+"""
+
 class BaseTransformer:
     """
-    Purpose: Acts as the parent class for all transformers to ensure 
-    output consistency across the pipeline.
+    Purpose:
+        Acts as the parent class for all transformers to ensure 
+        output consistency across the pipeline.
     """
 
     def __init__(self, config: Dict[str, Any]):
         """
+        Purpose: Initializes the transformer with shared configuration.
+
         Args:
             config (Dict[str, Any]): Configuration containing 'index_name'.
         """
         self.config = config
         self.index_name = config.get("index_name")
+        logger.debug(f"BaseTransformer initialized for index: {self.index_name}")
 
     def transform(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -36,7 +45,7 @@ class BaseTransformer:
         clean_row = {}
         
         for key, value in data.items():
-            # Standardizing Data Types
+            # Standardizing Data Types for JSON serialization
             if isinstance(value, (datetime, date)):
                 clean_row[key] = value.isoformat()
             elif isinstance(value, Decimal):

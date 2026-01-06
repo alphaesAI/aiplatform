@@ -1,15 +1,32 @@
-class BaseLoader:
+import logging
+from abc import ABC, abstractmethod
+
+logger = logging.getLogger(__name__)
+
+"""
+base.py
+====================================
+Purpose:
+    Defines the abstract interface for all data loaders.
+"""
+
+class BaseLoader(ABC):
     """
-    Abstract base class for all data loaders.
+    Purpose:
+        Abstract base class that enforces a 'load' method across all 
+        ingestion strategies (Single, Bulk, etc.).
     """
+
+    @abstractmethod
     def load(self, data):
         """
-        Enforces the implementation of the load method in child classes.
+        Purpose:
+            Enforces the implementation of the load method in child classes.
         
-        args:
-            data (dict): The data dictionary to be loaded.
+        Args:
+            data (Any): The data or iterator to be loaded into the destination.
             
-        returns:
-            None: This method must be overridden by child classes.
+        Returns:
+            None
         """
         raise NotImplementedError("Child classes must implement the load method!")

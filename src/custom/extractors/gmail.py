@@ -1,101 +1,109 @@
-"""
-Module: Gmail Extractor
-Purpose: Provides a specialized class to extract unstructured email data 
-from the Gmail API. It handles authentication via a provided connector, 
-discovers the monitored account profile automatically, and normalizes 
-raw API responses into a standard dictionary format.
-"""
-
+import logging
 import base64
 from typing import Dict, Any, List, Iterator
+from .base import BaseExtractor
 
-class GmailExtractor:
+logger = logging.getLogger(__name__)
+
+"""
+gmail.py
+====================================
+Purpose:
+    Handles extraction and normalization of email data from the Gmail API.
+"""
+
+class GmailExtractor(BaseExtractor):
     """
-    Purpose: Extracts and normalizes email data from a specific Gmail account.
-    This class acts as an iterator that yields cleaned email records.
+    Purpose: 
+        Extracts and normalizes email data. Acts as an iterator to 
+        handle memory-efficient processing of large batches.
     """
 
     def __init__(self, connection: Any, config: Dict[str, Any]):
         """
-        Purpose: Initializes the extractor and identifies the monitored account.
-        
+        Purpose: Initializes the Gmail extractor and identifies the source account.
+
         Args:
-            connection (Any): The authenticated Google Resource service object.
-            config (Dict[str, Any]): Configuration dictionary containing query, 
-                                     batch_size, extraction_mode, and fields.
+            connection (Any): Authenticated Gmail API service object.
+            config (Dict[str, Any]): Configuration for 'query', 'batch_size', etc.
         """
         self.service = connection
-        self.config: Dict[str, Any] = config
+        self.config = config
         
-        # Production Level: Fetch the email address once during initialization
+        # Identify the email address associated with the token
         profile = self.service.users().getProfile(userId='me').execute()
-        self.source_id: str = profile.get('emailAddress', 'unknown_account')
+        self.source_id = profile.get('emailAddress', 'unknown_account')
+        logger.info(f"GmailExtractor initialized for account: {self.source_id}")
 
     def __call__(self) -> Iterator[Dict[str, Any]]:
         """
-        Purpose: Allows the class to be called as a function to start extraction.
+        Purpose: Call the instance to begin extraction.
         
         Returns:
-            Iterator[Dict[str, Any]]: A generator yielding normalized email records.
+            Iterator[Dict[str, Any]]: Generator of normalized email records.
         """
         return self.extract()
 
     def extract(self) -> Iterator[Dict[str, Any]]:
         """
-        Purpose: Orchestrates the retrieval and normalization process.
-        
+        Purpose: Coordinates fetching message IDs and yielding normalized data.
+
         Yields:
-            Dict[str, Any]: A normalized dictionary representing a single email.
+            Dict[str, Any]: A single normalized email record.
         """
-        message_ids: List[str] = self._get_message_ids()
+        logger.info(f"Starting Gmail extraction with query: {self.config.get('query')}")
+        message_ids = self._get_message_ids()
 
         for msg_id in message_ids:
-            raw_msg: Dict[str, Any] = self.service.users().messages().get(
-                userId='me', 
-                id=msg_id, 
-                format=self.config.get('extraction_mode')
-            ).execute()
+            try:
+                raw_msg = self.service.users().messages().get(
+                    userId='me', 
+                    id=msg_id, 
+                    format=self.config.get('extraction_mode', 'full')
+                ).execute()
 
-            yield self._normalize_message(raw_msg)
+                yield self._normalize_message(raw_msg)
+            except Exception as e:
+                logger.error(f"Failed to extract message {msg_id}: {e}")
+                continue
         
     def _get_message_ids(self) -> List[str]:
         """
-        Purpose: Fetches a list of message IDs matching the query from the configuration.
-        
+        Purpose: Searches Gmail for IDs matching the config query.
+
         Returns:
-            List[str]: A list of Gmail internal message IDs.
+            List[str]: List of message IDs.
         """
-        query: str = self.config.get('query')
-        batch_size: int = self.config.get('batch_size')
+        query = self.config.get('query')
+        batch_size = self.config.get('batch_size', 10)
 
         result = self.service.users().messages().list(
             userId='me', q=query, maxResults=batch_size
         ).execute()
 
-        messages: List[Dict[str, str]] = result.get('messages', [])
+        messages = result.get('messages', [])
         return [m['id'] for m in messages]
 
     def _normalize_message(self, raw_msg: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Purpose: Transforms raw API response into a flattened, standard dictionary.
-        
+        Purpose: Flattens raw API JSON into a standard schema.
+
         Args:
-            raw_msg (Dict[str, Any]): The raw dictionary returned by the Gmail API.
-            
+            raw_msg (Dict[str, Any]): Raw JSON from Google.
+
         Returns:
-            Dict[str, Any]: A dictionary containing id, source, source_id, metadata, and body.
+            Dict[str, Any]: Normalized dictionary.
         """
-        headers: List[Dict[str, str]] = raw_msg.get('payload', {}).get('headers', [])
-        allowed_headers: List[str] = self.config.get('fields')
+        headers = raw_msg.get('payload', {}).get('headers', [])
+        allowed_headers = self.config.get('fields', [])
         
-        # Build metadata from whitelisted headers
-        metadata: Dict[str, str] = {
+        metadata = {
             h['name'].lower(): h['value'] 
             for h in headers 
             if h['name'].lower() in allowed_headers
         }
 
-        body: str = self._extract_body(raw_msg.get('payload', {}))
+        body = self._extract_body(raw_msg.get('payload', {}))
         
         return {
             "id": raw_msg.get('id'),
@@ -107,22 +115,20 @@ class GmailExtractor:
 
     def _extract_body(self, payload: Dict[str, Any]) -> str:
         """
-        Purpose: Recursively traverses the email payload to find and decode the body content.
-        
+        Purpose: Recursively decodes base64 body content.
+
         Args:
-            payload (Dict[str, Any]): The payload part of the Gmail message.
-            
+            payload (Dict[str, Any]): Gmail payload part.
+
         Returns:
-            str: The decoded UTF-8 string of the email body.
+            str: Decoded body string.
         """
-        # Case 1: Body data is directly in this part
         if 'data' in payload.get('body', {}):
             return base64.urlsafe_b64decode(payload['body']['data']).decode('utf-8')
         
-        # Case 2: Body is nested within parts (multipart emails)
         if 'parts' in payload:
             for part in payload['parts']:
-                body: str = self._extract_body(part)
+                body = self._extract_body(part)
                 if body:
                     return body
         return ""

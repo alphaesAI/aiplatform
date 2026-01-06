@@ -1,61 +1,57 @@
-"""
-Module: Embeddings
-Purpose: Converts text chunks into vector arrays using txtai.
-Integration: Uses a top-level conditional import pattern to prevent Airflow timeouts.
-"""
-
 import logging
 from typing import Dict, List, Any, Iterator
 
-# Setup logging
 logger = logging.getLogger(__name__)
 
-# Conditional import pattern
+"""
+embeddings.py
+====================================
+Purpose:
+    Converts text chunks into vector arrays using txtai. This module
+    allows for semantic search capabilities in the downstream database.
+"""
+
+# Conditional import pattern to prevent Airflow DAG import timeouts
 try:
     from txtai.embeddings import Embeddings as EmbEngine
     TXTAI = True
 except ImportError:
     TXTAI = False
 
-
 class Embeddings:
     """
-    Purpose: Generates semantic vectors for text chunks while preserving metadata.
-    
-    Responsibilities:
-    - Verify if txtai is available.
-    - Transform text to vectors using the Numpy backend.
-    - Preserve source_id and chunk_id alignment.
+    Purpose:
+        Generates semantic vectors for text chunks while preserving metadata.
+        Operates as a middleware between the Transformer and the Loader.
     """
 
     @staticmethod
-    def available():
+    def available() -> bool:
         """
-        Purpose: Checks if the txtai library is installed in the environment.
+        Purpose: Checks if the txtai library is installed.
         
         Returns:
-            bool: True if txtai is available, False otherwise.
+            bool: True if available, False otherwise.
         """
         return TXTAI
 
     def __init__(self, config: Dict[str, Any]):
         """
-        Purpose: Initializes the embedding engine.
-        
+        Purpose: Initializes the embedding engine with a specific model.
+
         Args:
             config (Dict[str, Any]): Configuration containing 'path' for the model.
         
         Raises:
-            ImportError: If txtai is not installed.
+            ImportError: If txtai is not installed in the environment.
         """
         if not Embeddings.available():
-            logger.error("txtai is not installed. Pipeline cannot generate vectors.")
+            logger.error("txtai is not installed. Vector generation disabled.")
             raise ImportError('txtai engine is not available - install "txtai" to enable embeddings.')
 
         self.config = config
         model_path = self.config.get("path", "sentence-transformers/all-MiniLM-L6-v2")
 
-        # Initialize engine in pass-through mode (Numpy)
         self.engine = EmbEngine({
             "path": model_path,
             "content": False,
@@ -65,20 +61,35 @@ class Embeddings:
 
     def embed(self, data: Iterator[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
         """
-        Purpose: Processes records wrapped in Elasticsearch format.
+        Purpose: 
+            Iterates through records and adds a 'vector' field to the '_source'.
+            This is designed to work seamlessly with the Transformer output.
+
+        Args:
+            data (Iterator[Dict[str, Any]]): Stream of records in Elasticsearch format.
+
+        Yields:
+            Dict[str, Any]: Records updated with vector embeddings.
         """
         for record in data:
-            # Reach into the '_source' created by BaseTransformer
             source_data = record.get("_source", {})
             text = source_data.get("text", "")
             
             if text:
-                # Generate and add vector INSIDE the _source
+                logger.debug(f"Generating embedding for record ID: {source_data.get('id')}")
                 vector_array = self.engine.transform(text)
                 source_data["vector"] = vector_array.tolist()
             
-            # Yield the whole record (including _index and updated _source)
             yield record
 
     def query(self, text: str) -> List[float]:
-        pass
+        """
+        Purpose: Converts a search string into a vector for querying.
+
+        Args:
+            text (str): The search query.
+
+        Returns:
+            List[float]: The vector representation of the query.
+        """
+        return self.engine.transform(text).tolist()
