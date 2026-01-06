@@ -1,51 +1,75 @@
-from airflow import DAG
-from datetime import datetime, timedelta
-from airflow.providers.standard.operators.python import PythonOperator
+"""
+Module: arXiv Data Pipeline - Credentials Phase
+Purpose: Orchestrates the retrieval of credentials for arXiv and Elasticsearch.
+"""
 
-# Importing the classes you shared
+import warnings
+import httpx
+from airflow import DAG
+from datetime import datetime
+from airflow.providers.standard.operators.python import PythonOperator
+from typing import Any, Dict
+
 from src.custom.credentials.factory import CredentialFactory
 from src.custom.connectors.factory import ConnectorFactory
 
-def test_opensearch_connection(**kwargs):
-    # 1. Get Credentials using your AirflowCredentials provider
-    # This calls the get_credentials() method you shared
-    creds_provider = CredentialFactory.get_provider(
+def arxiv_credentials(**kwargs: Any) -> Dict[str, Any]:
+    """
+    Retrieves arXiv specific credentials or API configurations 
+    from Airflow connections.
+    """
+    return CredentialFactory.get_provider(mode="airflow", conn_id="arxiv").get_credentials()
+
+def arxiv_connection(ti, **kwargs: Any) -> str:
+    """
+     Get credentials from XCOM
+     Call ArxivConnector
+    """
+    config = ti.xcom_pull(task_ids="arxiv_credentials")
+
+    if not config:
+        raise ValueError("No config found in XCom!")
+
+    connector = ConnectorFactory.get_connector(connector_type="arxiv", config=config)
+    return "connection created successfully."
+
+def es_credentials(**kwargs: Any) -> Dict[str, Any]:
+    """
+    Retrieves Elasticsearch credentials for the loading phase.
+    """
+    return CredentialFactory.get_provider(
         mode="airflow", 
-        conn_id="opensearch"
-    )
-    creds = creds_provider.get_credentials()
-    
-    # 2. Initialize the Connector
-    # This uses the OpensearchConnector class
-    connector = ConnectorFactory.get_connector(
-        connector_type="opensearch", 
-        config=creds
-    )
-    
-    # 3. Get the connection object
-    # Calling connector() triggers .connect() and returns the OpenSearch client
-    client = connector()
-    
-    # Simple execution check
-    info = client.info()
-    print(f"Connected to cluster: {info['cluster_name']}")
-    return True
+        conn_id="elasticsearch"
+    ).get_credentials()
 
 default_args = {
-    'owner': 'airflow',
-    'retries': 0
+    'owner': 'data_team',
+    'retries': 0,
+    'execution_timeout': None
 }
 
 with DAG(
-    'opensearch_connection_test',
+    'arxive_pipeline',
     default_args=default_args,
     start_date=datetime(2026, 1, 1),
-    schedule=None, # Manual trigger for testing
+    schedule="@daily",
     catchup=False,
-    tags=["infrastructure", "opensearch"]
+    tags=["arxiv", "txtai", "elasticsearch"]
 ) as dag:
 
-    connection_task = PythonOperator(
-        task_id='test_opensearch_connection',
-        python_callable=test_opensearch_connection,
+    arxiv_creds = PythonOperator(
+        task_id='arxiv_credentials',
+        python_callable=arxiv_credentials,
     )
+
+    arxiv_connection = PythonOperator(
+        task_id='arxiv_connection',
+        python_callable=arxiv_connection,
+    )
+
+    es_creds = PythonOperator(
+        task_id='es_credentials',
+        python_callable=es_credentials,
+    )
+
+    [arxiv_creds, es_creds] >> arxiv_connection

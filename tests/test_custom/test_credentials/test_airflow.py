@@ -12,6 +12,7 @@ class TestAirflowCredentials:
         mock_conn.host = "localhost"
         mock_conn.port = 5432
         mock_conn.login = "admin"
+        mock_conn.password = "secret_pass"
         mock_conn.schema = "production_db"
         mock_conn.extra_dejson = {"account": "aws_account_1", "region": "us-east-1"}
 
@@ -31,7 +32,7 @@ class TestAirflowCredentials:
 
         # Check if dictionary unpacking of extra_dejson worked
         assert creds["account"] == "aws_account_1"
-        assert creds["database"] == "us-east-1"
+        assert creds["region"] == "us-east-1"
 
     @patch("src.custom.credentials.airflow.BaseHook.get_connection")
     def test_get_credentials_missing_connection(self, mock_get_connection):

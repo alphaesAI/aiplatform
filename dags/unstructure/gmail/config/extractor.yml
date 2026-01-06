@@ -17,3 +17,6 @@ gmail_pipeline:
       sentences: true
       minlength: 20
       maxlength: 512
+    
+  load:
+    index_name: "gmail_index" # Loader uses this to create/verify the index
