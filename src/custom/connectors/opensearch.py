@@ -1,5 +1,6 @@
 import logging
 from opensearchpy import OpenSearch
+from .schemas import OpensearchConfig
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class OpensearchConnector:
         Args:
             config (dict): Contains 'schema', 'host', 'port', and 'verify_certs'.
         """
-        self.config = config
+        self.config = OpensearchConfig(**config)
         self._client = None
 
     def __call__(self):
@@ -54,16 +55,16 @@ class OpensearchConnector:
         Raises:
             ConnectionError: If the OpenSearch cluster is unreachable.
         """
-        protocol = self.config.get("schema", "http")
-        host = self.config.get("host")
-        port = self.config.get("port")
+        protocol = self.config.schema_type
+        host = self.config.host
+        port = self.config.port
         openserach_host = f"{protocol}://{host}:{port}"
         
         logger.info(f"Attempting to connect to OpenSearch at {openserach_host}")
 
         self._client = OpenSearch(
             [openserach_host],
-            verify_certs=self.config.get("verify_certs", False)
+            verify_certs=self.config.verify_certs
         )
 
         if not self._client.ping():

@@ -6,7 +6,7 @@ Purpose:
     file system interaction and data deserialization.
 """
 
-from .utils import load_yml, load_pickle
+from .reader import load_yml, load_pickle
 
 __all__ = [
     "load_yml",

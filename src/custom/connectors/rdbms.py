@@ -1,6 +1,7 @@
 import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
+from .schemas import RDBMSConfig
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +29,10 @@ class RDBMSConnector:
             config (dict): Database parameters including 'db_type', 'user', 
                           'password', 'host', 'port', and 'database'.
         """
-        self.config = config
+        self.config = RDBMSConfig(**config)
         self._engine = None
         self._connection = None
-        logger.debug("RDBMSConnector initialized for host: %s", config.get("host"))
+        logger.debug("RDBMSConnector initialized for host: %s", self.config.host)
 
     def __call__(self):
         """
@@ -60,12 +61,12 @@ class RDBMSConnector:
             Exception: If the database connection or test query fails.
         """
         url_params = {
-            "drivername": self.config.get("db_type") or self.config.get("type"),
-            "username": self.config.get("user"),
-            "password": self.config.get("password"),
-            "host": self.config.get("host"),
-            "port": self.config.get("port"),
-            "database": self.config.get("database"),
+            "drivername": self.config.db_type,
+            "username": self.config.username,
+            "password": self.config.password,
+            "host": self.config.host,
+            "port": self.config.port,
+            "database": self.config.database,
         }
 
         connection_url = URL.create(**{k: v for k, v in url_params.items() if v is not None})

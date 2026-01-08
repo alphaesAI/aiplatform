@@ -2,6 +2,7 @@ import logging
 from sqlalchemy import text
 from typing import Dict, Any, List
 from .base import BaseExtractor
+from .schemas import RDBMSExtractorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class RDBMSExtractor(BaseExtractor):
             config (Dict[str, Any]): Config containing a list of 'tables'.
         """
         self.connection = connection
-        self.config = config
+        self.config = RDBMSExtractorConfig(**config)
 
     def __call__(self) -> Dict[str, List[Dict[str, Any]]]:
         """
@@ -47,12 +48,12 @@ class RDBMSExtractor(BaseExtractor):
             Dict[str, List[Dict[str, Any]]]: A map of table names to rows.
         """
         results = {}
-        tables = self.config.get("tables", [])
+        tables = self.config.tables
 
         for table in tables:
-            name = table.get("table_name")
-            schema = table.get("schema", "public")
-            cols = table.get("columns")
+            name = table.table_name
+            schema = table.schema_name
+            cols = table.columns
 
             column_query = "*" if not cols else ", ".join(cols)
             query = f"SELECT {column_query} FROM {schema}.{name}"

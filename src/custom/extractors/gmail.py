@@ -1,7 +1,9 @@
 import logging
 import base64
+from pathlib import Path
 from typing import Dict, Any, List, Iterator
 from .base import BaseExtractor
+from .schemas import GmailExtractorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ class GmailExtractor(BaseExtractor):
             config (Dict[str, Any]): Configuration for 'query', 'batch_size', etc.
         """
         self.service = connection
-        self.config = config
+        self.config = GmailExtractorConfig(**config)
         
         # Identify the email address associated with the token
         profile = self.service.users().getProfile(userId='me').execute()
@@ -51,7 +53,7 @@ class GmailExtractor(BaseExtractor):
         Yields:
             Dict[str, Any]: A single normalized email record.
         """
-        logger.info(f"Starting Gmail extraction with query: {self.config.get('query')}")
+        logger.info(f"Starting Gmail extraction with query: {self.config.query}")
         message_ids = self._get_message_ids()
 
         for msg_id in message_ids:
@@ -59,7 +61,7 @@ class GmailExtractor(BaseExtractor):
                 raw_msg = self.service.users().messages().get(
                     userId='me', 
                     id=msg_id, 
-                    format=self.config.get('extraction_mode', 'full')
+                    format=self.config.extraction_mode
                 ).execute()
 
                 yield self._normalize_message(raw_msg)
@@ -74,8 +76,8 @@ class GmailExtractor(BaseExtractor):
         Returns:
             List[str]: List of message IDs.
         """
-        query = self.config.get('query')
-        batch_size = self.config.get('batch_size', 10)
+        query = self.config.query
+        batch_size = self.config.batch_size
 
         result = self.service.users().messages().list(
             userId='me', q=query, maxResults=batch_size
@@ -83,6 +85,48 @@ class GmailExtractor(BaseExtractor):
 
         messages = result.get('messages', [])
         return [m['id'] for m in messages]
+
+    def _handle_attachments(self, msg_id: str, payload: Dict[str, Any]) -> List[str]:
+        """
+        Purpose: 
+            Iterates through email parts, downloads files, and saves them locally.
+        """
+        file_paths = []
+        parts = payload.get('parts', [])
+        
+        # Define relative path using Pathlib
+        base_path = Path("/tmp/aiplatform/gmail/extractors") / msg_id
+        logger.info(f"PHYSICAL PATH: {base_path.absolute()}")
+        base_path.mkdir(parents=True, exist_ok=True)
+
+        for part in parts:
+            filename = part.get('filename')
+            body = part.get('body', {})
+            attachment_id = body.get('attachmentId')
+
+            # If it has a filename and an ID, it's an actual file
+            if filename and attachment_id:
+                logger.info(f"Downloading attachment: {filename} for message {msg_id}")
+                
+                # Fetch the actual file bytes from Gmail
+                attachment = self.service.users().messages().attachments().get(
+                    userId='me', messageId=msg_id, id=attachment_id
+                ).execute()
+                
+                # Decode the base64 string into raw binary data
+                file_data = base64.urlsafe_b64decode(attachment['data'])
+                
+                # Define the final file location
+                target_file = base_path / filename
+                
+                # Write the binary data to disk
+                with open(target_file, 'wb') as f:
+                    f.write(file_data)
+                
+                # Add the string version of the path to our list
+                file_paths.append(str(target_file))
+                
+        return file_paths
 
     def _normalize_message(self, raw_msg: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -94,23 +138,30 @@ class GmailExtractor(BaseExtractor):
         Returns:
             Dict[str, Any]: Normalized dictionary.
         """
-        headers = raw_msg.get('payload', {}).get('headers', [])
-        allowed_headers = self.config.get('fields', [])
+        msg_id = raw_msg.get('id')
+        payload = raw_msg.get('payload', {})
+        headers = payload.get('headers', [])
+        allowed_headers = self.config.fields
         
         metadata = {
-            h['name'].lower(): h['value'] 
+            h.get('name', '').lower(): h.get('value') 
             for h in headers 
-            if h['name'].lower() in allowed_headers
+            if h.get('name', '').lower() in allowed_headers
         }
 
-        body = self._extract_body(raw_msg.get('payload', {}))
+        # 1. Extract the text body
+        body_text = self._extract_body(payload)
+        
+        # 2. Download attachments and get their local paths
+        attachment_paths = self._handle_attachments(msg_id, payload)
         
         return {
-            "id": raw_msg.get('id'),
+            "id": msg_id,
             "source": "gmail",
             "source_id": self.source_id,
             "metadata": metadata,
-            "body": body.strip() if body else ""
+            "body": body_text.strip() if body_text else "",
+            "attachments": attachment_paths  
         }
 
     def _extract_body(self, payload: Dict[str, Any]) -> str:

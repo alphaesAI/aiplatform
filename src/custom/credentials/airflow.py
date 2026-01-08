@@ -1,6 +1,7 @@
 import logging
 from airflow.hooks.base import BaseHook
 from .base import CredentialProvider
+from .schemas import AirflowConnectionSchema
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,12 @@ class AirflowCredentials(CredentialProvider):
                 **conn.extra_dejson  # Merges extras (like verify_certs, schema, etc.)
             }
             
+            # Validate with Pydantic
+            # This ensures 'port' is an int and 'password' is treated as a secret
+            validated_conn = AirflowConnectionSchema(**creds)
             logger.debug(f"Successfully unpacked credentials for {self.conn_id}")
-            return creds
+            
+            return validated_conn.model_dump()
 
         except Exception as e:
             logger.exception(f"Failed to retrieve Airflow connection: {self.conn_id}")

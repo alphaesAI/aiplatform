@@ -1,6 +1,7 @@
 import logging
 from elasticsearch import helpers
 from .base import BaseLoader
+from .schemas import IngestorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class Ingestor(BaseLoader):
             config (dict): YAML configuration for index settings and mappings.
         """
         self.connection = connection
-        self.config = config
+        self.config = IngestorConfig(**config)
 
     def create(self) -> None:
         """
@@ -36,10 +37,10 @@ class Ingestor(BaseLoader):
         Returns:
             None
         """
-        name = self.config.get("index_name")
+        name = self.config.index_name
         body = {
-            "settings": self.config.get("settings", {}),
-            "mappings": self.config.get("mappings", {})
+            "settings": self.config.settings,
+            "mappings": self.config.mappings
         }
         if not self.connection.indices.exists(index=name):
             logger.info(f"Index '{name}' does not exist. Creating with provided mappings.")
@@ -86,5 +87,14 @@ class BulkIngestor(Ingestor):
             data (Iterator): Stream of records.
         """
         logger.info("Starting bulk ingestion.")
-        success, failed = helpers.bulk(self.connection, data)
-        logger.info(f"Bulk indexing complete. Success: {success}, Failed: {len(failed) if isinstance(failed, list) else failed}")
+        try:
+            # Set stats_only=False to get the full list of errors
+            success, failed = helpers.bulk(self.connection, data, stats_only=False)
+            logger.info(f"Bulk indexing complete. Success: {success}, Failed: {len(failed)}")
+        except helpers.BulkIndexError as e:
+            # THIS IS CRITICAL: Loop through errors to see the REAL cause
+            for i, item in enumerate(e.errors):
+                # Just show the first few to avoid log spam
+                if i < 3:
+                    logger.error(f"Sample Failure: {item}")
+            raise  # Re-raise so Airflow knows the task failed

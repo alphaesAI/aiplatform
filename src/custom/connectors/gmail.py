@@ -1,6 +1,7 @@
 import logging
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from .schemas import GmailConfig
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class GmailConnector:
         Args:
             config (dict): Must contain 'token_dict' with valid OAuth2 tokens.
         """
-        self.config = config
+        self.config = GmailConfig(**config)
         self._service = None
 
     def __call__(self):
@@ -55,7 +56,7 @@ class GmailConnector:
         if not self._service:
             logger.info("Initializing Gmail API service...")
             try:
-                token_info = self.config.get("token_dict")
+                token_info = self.config.token_dict
                 creds = Credentials.from_authorized_user_info(
                     token_info,
                     scopes=['https://www.googleapis.com/auth/gmail.readonly']

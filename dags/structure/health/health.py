@@ -1,7 +1,17 @@
+import warnings
 import logging
+
+# Standard ignore for common Airflow and library warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+# Specific ignore for the skops/txtai noise
+warnings.filterwarnings("ignore", module="skops")
+
+# Set external loggers to ERROR only to reduce noise
+logging.getLogger("skops").setLevel(logging.ERROR)
+
 from datetime import datetime, timedelta
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 # Internal imports
 from src.custom.credentials.factory import CredentialFactory

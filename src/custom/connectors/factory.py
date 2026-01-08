@@ -4,7 +4,7 @@ from typing import Any
 from .rdbms import RDBMSConnector
 from .gmail import GmailConnector
 from .arxiv import ArxivConnector
-from .elasticsearch import ESConnector
+from .elasticsearch import ElasticsearchConnector
 from .opensearch import OpensearchConnector
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class ConnectorFactory:
         elif connector_type == "arxiv":
             return ArxivConnector(config=config)
         elif connector_type == "elasticsearch":
-            return ESConnector(config=config)
+            return ElasticsearchConnector(config=config)
         elif connector_type == "opensearch":
             return OpensearchConnector(config=config)
         else:

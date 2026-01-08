@@ -1,5 +1,6 @@
 import logging
 from elasticsearch import Elasticsearch
+from .schemas import ElasticsearchConfig
 
 # --- Logger Setup ---
 logging.basicConfig(
@@ -19,7 +20,7 @@ Purpose:
     verification via ping.
 """
 
-class ESConnector:
+class ElasticsearchConnector:
     """
     Purpose:
         The ESConnector class acts as a wrapper around the official Elasticsearch client.
@@ -37,7 +38,7 @@ class ESConnector:
                            Expected keys: 'schema', 'host', 'port'.
                            Optional keys: 'verify_certs'.
         """
-        self.config = config
+        self.config = ElasticsearchConfig(**config)
         self._client = None
         logger.debug("ESConnector initialized with config keys: %s", list(config.keys()))
 
@@ -69,12 +70,12 @@ class ESConnector:
         Raises:
             ConnectionError: If the client fails to ping the Elasticsearch host.
         """
-        protocol = self.config.get("schema", "http") # Default to http if missing
-        host = self.config.get("host", "localhost")
-        port = self.config.get("port", 9200)
+        protocol = self.config.schema_type
+        host = self.config.host
+        port = self.config.port
 
         es_host = f"{protocol}://{host}:{port}"
-        verify_certs = self.config.get("verify_certs", False)
+        verify_certs = self.config.verify_certs
 
         logger.info(f"Attempting to connect to Elasticsearch at: {es_host}")
 

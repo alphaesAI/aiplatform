@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, List, Any, Iterator
+from .schemas import EmbeddingsConfig
 
 logger = logging.getLogger(__name__)
 
@@ -11,13 +12,6 @@ Purpose:
     allows for semantic search capabilities in the downstream database.
 """
 
-# Conditional import pattern to prevent Airflow DAG import timeouts
-try:
-    from txtai.embeddings import Embeddings as EmbEngine
-    TXTAI = True
-except ImportError:
-    TXTAI = False
-
 class Embeddings:
     """
     Purpose:
@@ -27,13 +21,11 @@ class Embeddings:
 
     @staticmethod
     def available() -> bool:
-        """
-        Purpose: Checks if the txtai library is installed.
-        
-        Returns:
-            bool: True if available, False otherwise.
-        """
-        return TXTAI
+        try:
+            import txtai
+            return True
+        except ImportError:
+            return False
 
     def __init__(self, config: Dict[str, Any]):
         """
@@ -45,19 +37,11 @@ class Embeddings:
         Raises:
             ImportError: If txtai is not installed in the environment.
         """
-        if not Embeddings.available():
-            logger.error("txtai is not installed. Vector generation disabled.")
-            raise ImportError('txtai engine is not available - install "txtai" to enable embeddings.')
-
-        self.config = config
-        model_path = self.config.get("path", "sentence-transformers/all-MiniLM-L6-v2")
-
-        self.engine = EmbEngine({
-            "path": model_path,
-            "content": False,
-            "backend": "numpy"
-        })
-        logger.info(f"Embeddings engine initialized with model: {model_path}")
+        from txtai.embeddings import Embeddings as EmbEngine
+        
+        self.config = EmbeddingsConfig(**config)
+        self.engine = EmbEngine(self.config.model_dump())
+        logger.info(f"Embeddings engine initialized with model: {self.config.path}")
 
     def embed(self, data: Iterator[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
         """
@@ -92,4 +76,4 @@ class Embeddings:
         Returns:
             List[float]: The vector representation of the query.
         """
-        return self.engine.transform(text).tolist()
+        pass

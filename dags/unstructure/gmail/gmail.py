@@ -5,6 +5,15 @@ Purpose: Orchestrates Gmail data flow: Credentials -> Extraction -> Transformati
 
 import warnings
 import logging
+
+# Standard ignore for common Airflow and library warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+# Specific ignore for the skops/txtai noise
+warnings.filterwarnings("ignore", module="skops")
+
+# Set external loggers to ERROR only to reduce noise
+logging.getLogger("skops").setLevel(logging.ERROR)
+
 from airflow import DAG
 from datetime import datetime, timedelta
 from airflow.providers.standard.operators.python import PythonOperator
@@ -20,19 +29,6 @@ from src.custom.loaders.embeddings import Embeddings
 from src.custom.utils.reader import load_yml, load_pickle
 
 logger = logging.getLogger(__name__)
-
-# --- CLEAN WARNING BLOCK ---
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", message=".*attribute is deprecated.*")
-
-try:
-    from airflow.exceptions import DeprecatedImportWarning
-    warnings.filterwarnings("ignore", category=DeprecatedImportWarning, module="skops")
-except ImportError:
-    pass
-
-logging.getLogger("skops").setLevel(logging.ERROR)
-# --- END WARNING BLOCK ---
 
 def credentials_task(**kwargs: Any) -> Dict[str, Any]:
     """
