@@ -56,3 +56,19 @@ def test_embeddings_workflow():
 
 if __name__ == "__main__":
     test_embeddings_workflow()
+
+
+# Check that the attachments are being embedded.
+
+"""
+curl -X GET "localhost:9200/gmail_index/_search?pretty" -H 'Content-Type: application/json' -d'
+{
+  "query": {
+    "match": {
+      "text":"Data is collected from multiple sources using connectors"
+    }
+  }
+}'
+"""
+
+# run the above commands in the terminal to check if the attachments are being embedded. (the text field should contain the attachment content)

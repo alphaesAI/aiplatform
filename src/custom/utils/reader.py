@@ -15,7 +15,7 @@ Purpose:
     files (YAML) and serialized data (Pickle/JSON).
 """
 
-def load_yml(file_path: str) -> Dict[str, Any]:
+def load_yml(file_path: Union[str, Path]) -> Dict[str, Any]:
     """
     Purpose:
         Reads and parses a YAML configuration file.
