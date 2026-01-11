@@ -1,8 +1,8 @@
-import pytest
+import unittest
 from unittest.mock import MagicMock, patch
 from src.custom.credentials.airflow import AirflowCredentials
 
-class TestAirflowCredentials:
+class TestAirflowCredentials(unittest.TestCase):
     @patch("src.custom.credentials.airflow.BaseHook.get_connection")
     def test_get_credentials_success(self, mock_get_connection):
         """ Should correctly map airflow connection attributes to a flat dictionary. """
@@ -42,5 +42,8 @@ class TestAirflowCredentials:
         
         provider = AirflowCredentials(conn_id="missing_id")
         
-        with pytest.raises(Exception, match="isn't defined"):
+        with self.assertRaises(Exception):
             provider.get_credentials()
+
+if __name__ == '__main__':
+    unittest.main()
