@@ -13,6 +13,7 @@ from .factory import ConnectorFactory
 from .rdbms import RDBMSConnector
 from .gmail import GmailConnector
 from .arxiv import ArxivConnector
+from .jina import JinaConnector
 from .elasticsearch import ElasticsearchConnector
 from .opensearch import OpensearchConnector
 

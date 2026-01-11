@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict
 from .rdbms import RDBMSExtractor
 from .gmail import GmailExtractor
+from .arxiv import PDFParserService
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,8 @@ class ExtractorFactory:
             return RDBMSExtractor(connection=connection, config=config)
         elif extractor_type == "gmail":
             return GmailExtractor(connection=connection, config=config)
+        elif extractor_type == "arxivparser":
+            return PDFParserService(config=config)
         else:
             error_msg = f"Unknown extractor type: {extractor_type}"
             logger.error(error_msg)

@@ -1,18 +1,26 @@
 import logging
 from typing import Dict, List, Any, Iterator
+
+# 1. Module-level Conditional Import
+try:
+    from txtai.embeddings import Embeddings as EmbEngine
+    TXTAI_AVAILABLE = True
+except ImportError:
+    TXTAI_AVAILABLE = False
+
 from .schemas import EmbeddingsConfig
 
 logger = logging.getLogger(__name__)
 
 """
-embeddings.py
+txtai.py
 ====================================
 Purpose:
     Converts text chunks into vector arrays using txtai. This module
     allows for semantic search capabilities in the downstream database.
 """
 
-class Embeddings:
+class TxtaiEmbeddings:
     """
     Purpose:
         Generates semantic vectors for text chunks while preserving metadata.
@@ -21,11 +29,7 @@ class Embeddings:
 
     @staticmethod
     def available() -> bool:
-        try:
-            import txtai
-            return True
-        except ImportError:
-            return False
+        return TXTAI_AVAILABLE
 
     def __init__(self, config: Dict[str, Any]):
         """
@@ -37,8 +41,13 @@ class Embeddings:
         Raises:
             ImportError: If txtai is not installed in the environment.
         """
-        from txtai.embeddings import Embeddings as EmbEngine
-        
+        # CRITICAL GUARD: Don't let the code run if txtai is missing
+        if not self.available():
+            raise ImportError(
+                "txtai is not installed. Please install it with 'pip install txtai' "
+                "to use the TxtaiEmbeddings module."
+            )
+
         self.config = EmbeddingsConfig(**config)
         self.engine = EmbEngine(self.config.model_dump())
         logger.info(f"Embeddings engine initialized with model: {self.config.path}")

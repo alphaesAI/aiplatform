@@ -1,6 +1,7 @@
 import httpx
 import logging
 from typing import Optional, Dict, Any
+from .base import BaseConnector
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,7 @@ Purpose:
     Handles asynchronous HTTP connections to the Arxiv API using httpx.
 """
 
-class ArxivConnector:
+class ArxivConnector(BaseConnector):
     """
     Purpose:
         Responsible for managing the lifecycle of an AsyncClient for 

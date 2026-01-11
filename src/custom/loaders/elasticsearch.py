@@ -13,7 +13,7 @@ Purpose:
     either single-index or bulk-index strategies.
 """
 
-class Ingestor(BaseLoader):
+class ElasticsearchIngestor(BaseLoader):
     """
     Purpose:
         Parent class to handle common connection management and index 
@@ -58,7 +58,7 @@ class Ingestor(BaseLoader):
         self.create()
         return self.load(data)
 
-class SingleIngestor(Ingestor):
+class ElasticsearchSingleIngestor(ElasticsearchIngestor):
     """
     Purpose: Loads data row-by-row. Useful for small datasets or streaming.
     """
@@ -77,7 +77,7 @@ class SingleIngestor(Ingestor):
             count += 1
         logger.info(f"Successfully indexed {count} documents individually.")
 
-class BulkIngestor(Ingestor):
+class ElasticsearchBulkIngestor(ElasticsearchIngestor):
     """
     Purpose: Loads data in efficient batches using the Elasticsearch helpers.
     """

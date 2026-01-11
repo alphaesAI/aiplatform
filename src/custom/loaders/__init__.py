@@ -7,10 +7,17 @@ Purpose:
 
 from .factory import LoaderFactory
 from .base import BaseLoader
-from .embeddings import Embeddings
+from .elasticsearch import ElasticsearchIngestor, ElasticsearchSingleIngestor, ElasticsearchBulkIngestor
+from .opensearch import OpensearchIngestor, OpensearchSingleIngestor, OpensearchBulkIngestor
 
 __all__ = [
     "LoaderFactory",
     "BaseLoader",
+    "ElasticsearchIngestor",
+    "ElasticsearchSingleIngestor",
+    "ElasticsearchBulkIngestor",
+    "OpensearchIngestor",
+    "OpensearchSingleIngestor",
+    "OpensearchBulkIngestor",
     "Embeddings"
 ]

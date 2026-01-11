@@ -3,7 +3,7 @@ import yaml
 import pickle
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 logger = logging.getLogger(__name__)
 

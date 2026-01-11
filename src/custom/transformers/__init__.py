@@ -8,8 +8,13 @@ Purpose:
 
 from .factory import TransformerFactory
 from .base import BaseTransformer
+from .pdf import DoclingEngine, PDFTransformer
+from .text import TextChunker
 
 __all__ = [
     "TransformerFactory",
-    "BaseTransformer"
+    "BaseTransformer",
+    "DoclingEngine",
+    "PDFTransformer",
+    "TextChunker",
 ]

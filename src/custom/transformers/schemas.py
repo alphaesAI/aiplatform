@@ -38,3 +38,39 @@ class TransformerOutputChunk(BaseModel):
     text: str
     source_id: str
     metadata: Dict[str, Any]
+
+
+# ----- ARXIV CHUNKER -------
+
+from typing import Optional
+from pydantic import BaseModel
+
+class ChunkMetadata(BaseModel):
+    """Metadata for a text chunk."""
+
+    chunk_index: int
+    start_char: int
+    end_char: int
+    word_count: int
+    overlap_with_previous: int
+    overlap_with_next: int
+    section_title: Optional[str] = None
+
+
+class TextChunk(BaseModel):
+    """A chunk of text with metadata."""
+
+    text: str
+    metadata: ChunkMetadata
+    arxiv_id: str
+    # paper_id: str
+
+class PdfContent(BaseModel):
+    """PDF-specific content extracted by parsers like Docling."""
+
+    sections: List[PaperSection] = Field(default_factory=list, description="Paper sections")
+    figures: List[PaperFigure] = Field(default_factory=list, description="Figures")
+    tables: List[PaperTable] = Field(default_factory=list, description="Tables")
+    raw_text: str = Field(..., description="Full extracted text")
+    references: List[str] = Field(default_factory=list, description="References")
+    parser_used: ParserType = Field(..., description="Parser used for extraction")

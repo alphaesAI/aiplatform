@@ -1,6 +1,11 @@
 import logging
 from typing import Any, Dict
 
+from .document import DocumentTransformer
+from .json_transformer import JsonTransformer
+from .pdf import PDFTransformer
+from .text import TextChunker
+
 logger = logging.getLogger(__name__)
 
 """
@@ -36,12 +41,16 @@ class TransformerFactory:
         transformer_type = transformer_type.lower().strip()
 
         if transformer_type == "document":
-            from .document import DocumentTransformer
             return DocumentTransformer(data, config)
         
         elif transformer_type == "json":
-            from .json_transformer import JsonTransformer
             return JsonTransformer(data, config)
+        
+        elif transformer_type == "chunker":
+            return TextChunker(config)
+        
+        elif transformer_type == "pdf":
+            return PDFTransformer(data, config)
         
         else:
             error_msg = f"Unknown transformer type: {transformer_type}"

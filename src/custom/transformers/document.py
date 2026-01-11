@@ -1,5 +1,14 @@
 import logging
 from typing import Dict, Any, Iterator, List
+
+
+# 1. Module-level Conditional Import
+try:
+    from txtai.pipeline.data import Textractor
+    TXTAI_AVAILABLE = True
+except ImportError:
+    TXTAI_AVAILABLE = False
+
 from .base import BaseTransformer
 from .schemas import DocumentTransformerConfig, TransformerInputRecord, TransformerOutputChunk
 
@@ -30,9 +39,7 @@ class DocumentTransformer(BaseTransformer):
         self.transformer_config = DocumentTransformerConfig(**config)
         super().__init__(config)
         
-        try:
-            from txtai.pipeline.data import Textractor
-        except ImportError:
+        if not TXTAI_AVAILABLE:
             raise ImportError("txtai is required for DocumentTransformer. Install it with 'pip install txtai'.")
         
         self.data = data        
