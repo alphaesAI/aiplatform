@@ -7,41 +7,59 @@ from typing import Dict, List, Optional, Any
 
 from .downloader import ArxivDownloader
 from ..base import BaseExtractor
+from ..schemas import ArxivExtractorConfig
 
 logger = logging.getLogger(__name__)
 
+"""
+arxiv_extractor.py
+====================================
+Purpose:
+    Handles the structured extraction of academic paper metadata from the 
+    arXiv API and manages the associated PDF download workflow.
+"""
+
 class ArxivExtractor(BaseExtractor):
     """
-    Main Entry Point for Arxiv Extraction.
-    Coordinates metadata fetching and PDF downloading.
+    Purpose:
+        Main Entry Point for Arxiv Extraction.
+        Coordinates metadata fetching and PDF downloading.
     """
 
     def __init__(self, connector, config: Dict[str, str]):
-        self.connector = connector
-        self.config = config
+        """
+        Purpose: Initializes the extractor with a connector and configuration.
 
-        # Internalize config values needed for metadata logic
-        self.ns = config.get("namespaces", {})
-        self.base_url = config.get("base_url")
-        self.rate_limit_delay = config.get("rate_limit_delay")
-        # self.max_results = config.get("max_results")
-        # self.category = config.get("search_category")
+        Args:
+            connector: Shared connection object (ArxivConnector).
+            config (Dict[str, str]): Configuration dictionary for categories and limits.
+        """
+        self.connector = connector
+        self.config = ArxivExtractorConfig(**config)
         self._last_request_time: Optional[float] = None
 
-        # Initialize the downloader helper with the SAME connector
         self.downloader = ArxivDownloader(connector, config)
 
-        logger.info(f"ArxivExtractor initialized for category: {config.get('search_category')}")
+        logger.info(f"ArxivExtractor initialized for category: {self.config.search_category}")
 
     async def __call__(self, **kwargs) -> List[Dict]:
-        """Trigger the main extraction workflow."""
+        """
+        Purpose: Trigger the main extraction workflow.
+        
+        Returns:
+            List[Dict]: List of papers with metadata and local file paths.
+        """
         return await self.extract(**kwargs)
 
     async def extract(self, **kwargs) -> List[Dict]:
         """
-        1. Fetch Metadata
-        2. Download associated PDFs
-        3. Return combined results
+        Purpose: Orchestrates the two-step extraction process.
+        1. Fetch Metadata from API.
+        2. Download associated PDFs to local storage.
+        3. Return combined results.
+
+        Returns:
+            List[Dict]: Enriched paper data.
         """
         # Step 1: Fetch Metadata
         papers = await self.fetch_papers(**kwargs)
@@ -62,11 +80,25 @@ class ArxivExtractor(BaseExtractor):
         from_date: Optional[str] = None,
         to_date: Optional[str] = None,
     ) -> List[Dict]:
+        """
+        Purpose: Performs the HTTP request to the Arxiv Atom Feed API.
+
+        Args:
+            max_results (int, optional): Number of papers to fetch.
+            start (int): Offset for pagination.
+            sort_by (str): Criteria to sort results.
+            sort_order (str): Order of results.
+            from_date (str, optional): Start date for search query.
+            to_date (str, optional): End date for search query.
+
+        Returns:
+            List[Dict]: Parsed metadata for found papers.
+        """
 
         await self._rate_limit()
 
-        max_results = max_results or self.config.get("max_results")
-        category = self.config.get("search_category")
+        max_results = max_results or self.config.max_results
+        category = self.config.search_category
 
         search_query = f"cat:{category}"
         if from_date or to_date:
@@ -82,7 +114,7 @@ class ArxivExtractor(BaseExtractor):
             "sortOrder": sort_order,
         }
 
-        url = f"{self.base_url}?{urlencode(params, quote_via=quote, safe=':+[]*')}"
+        url = f"{self.config.base_url}?{urlencode(params, quote_via=quote, safe=':+[]*')}"
 
         logger.info(f"Requesting Arxiv feed: {url}")
         client = await self.connector() # Reusing shared connection
@@ -92,6 +124,15 @@ class ArxivExtractor(BaseExtractor):
         return self._parse_xml(response.text)
 
     def _parse_xml(self, xml_data: str) -> List[Dict]:
+        """
+        Purpose: Parses the Arxiv Atom XML response into a Python list of dictionaries.
+
+        Args:
+            xml_data (str): Raw XML string from the API.
+
+        Returns:
+            List[Dict]: Normalized metadata fields.
+        """
         root = ET.fromstring(xml_data)
         entries = root.findall("atom:entry", self.ns)
         results = []
@@ -117,14 +158,27 @@ class ArxivExtractor(BaseExtractor):
         return results
 
     def _get_pdf(self, entry) -> str:
+        """
+        Purpose: Extracts the PDF link from an Atom entry.
+
+        Args:
+            entry: XML element representing a paper entry.
+
+        Returns:
+            str: The URL of the PDF document.
+        """
         for link in entry.findall("atom:link", self.ns):
             if link.get("type") == "application/pdf":
                 return link.get("href")
         return ""
 
     async def _rate_limit(self):
+        """
+        Purpose: Internal helper to ensure Arxiv API rate limits are respected.
+        """
         if self._last_request_time is not None:
             elapsed = time.time() - self._last_request_time
             if elapsed < self.rate_limit_delay:
                 await asyncio.sleep(self.rate_limit_delay - elapsed)
         self._last_request_time = time.time()
+

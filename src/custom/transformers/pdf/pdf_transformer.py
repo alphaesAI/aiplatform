@@ -1,27 +1,37 @@
 import logging
 import asyncio
 from pathlib import Path
-from typing import Dict, Any, List, AsyncIterator
+from typing import Dict, Any, List
 
-from .base import BaseTransformer
-from .engine import DoclingEngine  # Replaces ArxivParser
-from src.custom.schemas import PdfContent
+from ..base import BaseTransformer
+from .engine import DoclingEngine  
+from ..schemas import PdfContent
 
 logger = logging.getLogger(__name__)
 
+"""
+pdf_transformer.py
+====================================
+Purpose:
+    Acts as the high-level orchestrator for PDF processing. It manages 
+    asynchronous concurrency, delegates parsing to the DoclingEngine, 
+    and wraps the resulting structured data into index-ready formats.
+"""
 
 class PDFTransformer(BaseTransformer):
     """
-    Generic PDF Transformer Entry Point.
-    
-    Transforms local PDF files into standardized, index-ready records
-    by delegating low-level parsing to DoclingEngine.
+    Purpose:
+        Generic PDF Transformer Entry Point.
+        Transforms local PDF files into standardized, index-ready records
+        by delegating low-level parsing to DoclingEngine.
     """
 
     def __init__(self, data: List[Path], config: Dict[str, Any]):
         """
-        Initialize the transformer.
-        
+        Purpose:
+            Initializes the transformer with a list of file paths and 
+            configuration for the underlying parsing engine.
+
         Args:
             data (List[Path]): List of PDF file paths to process.
             config (Dict): Contains 'index_name' and 'docling' sub-config.
@@ -30,19 +40,23 @@ class PDFTransformer(BaseTransformer):
         super().__init__(config)
         
         self.pdf_paths = data
-        self.docling_config = config.get("docling", {})
+        # Extract the docling sub-dictionary
+        docling_dict = config.get("docling", {})
         
-        # Initialize the Helper Engine
-        self.engine = DoclingEngine(self.docling_config)
+        # This validates everything (concurrency, ocr, etc.)
+        self.docling_config = DoclingConfig(**docling_dict)
         
-        # Concurrency management
-        self.max_concurrency = self.docling_config.get("max_concurrency", 4)
-        self.semaphore = asyncio.Semaphore(self.max_concurrency)
+        self.engine = DoclingEngine(docling_dict)
+        self.semaphore = asyncio.Semaphore(self.docling_config.max_concurrency)
     
     async def __call__(self) -> List[Dict[str, Any]]:
         """
-        Triggers the async transformation process and returns 
-        standardized records for all provided PDFs.
+        Purpose:
+            Triggers the async transformation process and returns 
+            standardized records for all provided PDFs.
+
+        Returns:
+            List[Dict[str, Any]]: A list of formatted records ready for Elasticsearch/OpenSearch.
         """
         if not self.pdf_paths:
             logger.warning("PdfTransformer received empty path list.")
@@ -67,8 +81,15 @@ class PDFTransformer(BaseTransformer):
 
     async def _process_single_pdf(self, pdf_path: Path) -> Optional[Dict[str, Any]]:
         """
-        Internal workflow for a single PDF:
-        Validate -> Parse -> Standardize -> Format for Indexing.
+        Purpose:
+            Internal workflow for a single PDF:
+            Validate -> Parse -> Standardize -> Format for Indexing.
+
+        Args:
+            pdf_path (Path): Path to the single PDF file to process.
+
+        Returns:
+            Optional[Dict[str, Any]]: Standardized index record or None if processing failed.
         """
         if not pdf_path.exists():
             logger.error(f"File not found: {pdf_path}")

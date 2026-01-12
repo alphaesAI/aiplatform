@@ -2,65 +2,72 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from ..base import BaseTransformer
 import pypdfium2 as pdfium
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
-# Updated to use the generic shared paths we defined
-# from src.custom.shared.exceptions import PDFParsingException, PDFValidationError
-from src.custom.schemas import (
-    ParserType,
-    PaperFigure,
-    PdfContent,
-    PaperSection,
-    PaperTable,
-)
+from ..schemas import DoclingConfig
 
 logger = logging.getLogger(__name__)
 
-class DoclingEngine:
+"""
+engine.py
+====================================
+Purpose:
+    An infrastructure-level transformer that utilizes the Docling library 
+    to convert raw PDF documents into structured data (Markdown/JSON). 
+    It handles deep document analysis including table and figure extraction.
+"""
+
+class DoclingEngine(BaseTransformer):
     """
-    Infrastructure Layer — Docling PDF Parser Engine
+    Purpose:
+        Infrastructure Layer — Docling PDF Parser Engine.
     
     Responsibilities:
-    - Low-level PDF validation (headers, size, pages)
-    - Docling conversion (PDF -> Markdown/JSON)
-    - Mapping Docling elements to our internal Schemas
+    - Low-level PDF validation (headers, size, pages).
+    - Docling conversion (PDF -> Markdown/JSON).
+    - Mapping Docling elements to our internal schemas (Sections, Tables, Figures).
     """
 
     def __init__(self, config: Dict[str, Any]):
         """
-        Initialize Docling with pipeline options.
-        """
-        self.max_pages = config.get("max_pages", 20)
-        # Convert MB to Bytes
-        self.max_file_size_bytes = config.get("max_file_size_mb", 15) * 1024 * 1024
+        Purpose:
+            Initializes the Docling converter with specified pipeline options 
+            such as OCR and table structure recognition.
 
-        # Configure Docling Features
+        Args:
+            config (Dict[str, Any]): Configuration dictionary containing 
+                                     limits and processing flags.
+        """
+        # Validate config via Pydantic
+        self.config = DoclingConfig(**config)
+        
+        self.max_pages = self.config.max_pages
+        # Math is cleaner now
+        self.max_file_size_bytes = self.config.max_file_size_mb * 1024 * 1024
+
         pipeline_options = PdfPipelineOptions(
-            do_table_structure=config.get("do_table_structure", True),
-            do_ocr=config.get("do_ocr", False),
+            do_table_structure=self.config.do_table_structure,
+            do_ocr=self.config.do_ocr,
         )
 
         self._converter = DocumentConverter(
             format_options={
-                InputFormat.PDF: PdfFormatOption(
-                    pipeline_options=pipeline_options
-                )
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
             }
         )
-
         self._warmed_up = False
-
-        logger.info(
-            "DoclingEngine initialized | max_pages=%s max_size_bytes=%s",
-            self.max_pages,
-            self.max_file_size_bytes,
-        )
+        logger.info(f"DoclingEngine ready | Max Pages: {self.max_pages}")
 
     def _warm_up_models(self):
-        """Warm up Docling models on first use to reduce latency."""
+        """
+        Purpose:
+            Warms up Docling AI models on first use to reduce latency for 
+            subsequent conversion calls.
+        """
         if not self._warmed_up:
             logger.info("Warming Docling models...")
             # Internal Docling warm-up happens on first convert() call, 
@@ -68,7 +75,17 @@ class DoclingEngine:
             self._warmed_up = True
 
     def _validate_pdf(self, pdf_path: Path):
-        """Strict validation: exists, header check, size, and page count."""
+        """
+        Purpose:
+            Performs strict file-level validation including existence, 
+            magic byte verification, file size, and page count.
+
+        Args:
+            pdf_path (Path): Path to the local PDF file.
+
+        Raises:
+            PDFValidationError: If the file is missing, corrupted, or exceeds limits.
+        """
         if not pdf_path.exists():
             raise PDFValidationError(f"File not found: {pdf_path}")
 
@@ -93,7 +110,18 @@ class DoclingEngine:
 
     async def parse_pdf(self, pdf_path: Path) -> Optional[PdfContent]:
         """
-        The main parsing pipeline.
+        Purpose:
+            The main parsing pipeline. Validates the PDF and then uses 
+            Docling to extract structured content.
+
+        Args:
+            pdf_path (Path): Local path to the PDF to be parsed.
+
+        Returns:
+            Optional[PdfContent]: Structured content object or None if validation fails.
+
+        Raises:
+            PDFParsingException: If the Docling conversion engine fails.
         """
         try:
             self._validate_pdf(pdf_path)

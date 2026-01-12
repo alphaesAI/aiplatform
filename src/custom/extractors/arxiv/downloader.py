@@ -3,38 +3,58 @@ import logging
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any
+from ..schemas import ArxivDownloaderConfig
 
 logger = logging.getLogger(__name__)
 
+"""
+arxiv_downloader.py
+====================================
+Purpose:
+    Handles the physical downloading of PDF files from arXiv. 
+    Manages local storage, directory creation, and streaming transfers 
+    to optimize memory usage.
+"""
 
 class ArxivDownloader:
     """
-    Infrastructure Layer - Arxiv PDF Downloader
-    
-    Now uses a shared connector to maintain a single HTTP session.
+    Purpose:
+        Infrastructure Layer - Arxiv PDF Downloader.
+        Uses a shared connector to maintain a single HTTP session across 
+        multiple download tasks.
     """
 
-    def __init__(self, connector, config: Dict[str, str]):
+    def __init__(self, connector, config: ArxivDownloaderConfig):
         """
-        Initialize with shared connector and minimalistic config.
+        Purpose:
+            Initializes the downloader, ensures the destination directory exists, 
+            and sets up operational limits.
+
+        Args:
+            connector: Shared connection object providing the HTTP client.
+            config (ArxivDownloaderConfig): Schema-validated configuration object.
         """
         self.connector = connector
         
         # Folder setup
-        self.download_dir = Path(config.get("download_dir", "./downloads"))
+        self.download_dir = Path(config.download_dir)
         self.download_dir.mkdir(parents=True, exist_ok=True)
 
         # Operational settings from config
-        self.rate_limit_delay = config.get("rate_limit_delay", 3)
-        self.max_retries = config.get("max_retries", 3)
-        self.retry_backoff = config.get("retry_backoff", 2)
+        self.rate_limit_delay = config.rate_limit_delay
+        self.max_retries = config.max_retries
+        self.retry_backoff = config.retry_backoff
         
         self._last_request_time: Optional[float] = None
 
         logger.info(f"PDF Downloader initialized | Target: {self.download_dir}")
 
     async def _rate_limit(self):
-        """Respect arXiv's polite usage policy."""
+        """
+        Purpose:
+            Internal helper to respect arXiv's polite usage policy.
+            Calculates the necessary wait time based on the last request timestamp.
+        """
         if self._last_request_time is not None:
             elapsed = time.time() - self._last_request_time
             if elapsed < self.rate_limit_delay:
@@ -44,7 +64,16 @@ class ArxivDownloader:
 
     async def download(self, paper: Dict, force: bool = False) -> Optional[Path]:
         """
-        Download PDF using the shared connector session.
+        Purpose:
+            Downloads a PDF for a given paper if it doesn't already exist.
+            Uses a retry mechanism with exponential backoff for resilience.
+
+        Args:
+            paper (Dict): Dictionary containing 'pdf_url' and 'arxiv_id'.
+            force (bool): If True, redownloads the file even if it exists locally.
+
+        Returns:
+            Optional[Path]: Path object to the downloaded file, or None if failed.
         """
         pdf_url = paper.get("pdf_url")
         arxiv_id = paper.get("arxiv_id")

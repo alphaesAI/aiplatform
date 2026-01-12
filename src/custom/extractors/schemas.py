@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 class GmailExtractorConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -22,3 +22,22 @@ class RDBMSExtractorConfig(BaseModel):
     
     # This validates that 'tables' is a list of RDBMSTableConfig objects
     tables: List[RDBMSTableConfig]
+
+class ArxivExtractorConfig(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    # API Metadata Settings
+    base_url: str = Field(default="https://export.arxiv.org/api/query")
+    search_category: str = Field(default="cs.AI")
+    max_results: int = Field(default=10)
+    namespaces: Dict[str, str] = Field(default_factory=lambda: {
+        "atom": "http://www.w3.org/2005/Atom",
+        "opensearch": "http://a9.com/-/spec/opensearch/1.1/",
+        "arxiv": "http://arxiv.org/schemas/atom"
+    })
+
+    # Infrastructure/Downloader Settings
+    download_dir: str = Field(default="/tmp/aiplatform/arxiv/downloads")
+    rate_limit_delay: float = Field(default=3.0)
+    max_retries: int = Field(default=3)
+    retry_backoff: int = Field(default=2)

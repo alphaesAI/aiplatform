@@ -29,3 +29,16 @@ class RDBMSConfig(BaseModel):
     
 class GmailConfig(BaseModel):
     token_dict: Dict[str, Any]
+
+class ArxivConfig(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    base_url: str = Field(default="https://export.arxiv.org/api/query")
+    timeout: int = Field(default=10, alias="timeout_seconds")
+
+class JinaConfig(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    base_url: str = Field(default="https://api.jina.ai/v1")
+    api_key: str
+    timeout: int = Field(default=30, alias="timeout_seconds")

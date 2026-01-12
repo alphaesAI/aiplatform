@@ -10,6 +10,7 @@ from .factory import TransformerFactory
 from .base import BaseTransformer
 from .pdf import DoclingEngine, PDFTransformer
 from .text import TextChunker
+from .schemas import DoclingConfig
 
 __all__ = [
     "TransformerFactory",
@@ -17,4 +18,5 @@ __all__ = [
     "DoclingEngine",
     "PDFTransformer",
     "TextChunker",
+    "DoclingConfig",
 ]

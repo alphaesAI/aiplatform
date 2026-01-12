@@ -13,36 +13,35 @@ from .apiconnector import JinaConnector
 
 logger = logging.getLogger(__name__)
 
+"""
+jina.py
+====================================
+Purpose:
+    Infrastructure service for interacting with the Jina AI Embeddings API. 
+    Handles the conversion of text chunks into high-dimensional vectors 
+    while managing network resilience and rate limits.
+"""
 
 class JinaEmbeddingsService:
     """
-    Jina Embeddings Service.
-
     Generates embeddings for passages and queries using
     Jina Embeddings v3 via a shared JinaConnector.
-
-    Responsibilities:
-    - Build embedding requests
-    - Handle retries, backoff, and rate limits
-    - Parse and return embedding vectors
-
-    Does NOT:
-    - Manage API keys
-    - Manage HTTP client lifecycle
     """
 
     def __init__(self, connector: JinaConnector, config: Dict[str, Any]):
         """
         Initialize embeddings service.
 
-        Parameters
-        ----------
-        connector : JinaConnector
-            Initialized HTTP connector for Jina API.
-        config : dict
-            Required keys:
-            - max_retries (int)
-            - base_backoff (float)
+        Args:
+            connector : JinaConnector
+                Initialized HTTP connector for Jina API.
+            config : dict
+                Required keys:
+                - max_retries (int)
+                - base_backoff (float)
+                - model (str)
+                - dimensions (int)
+                - tasks (dict)
         """
         self.connector = connector
         
@@ -64,6 +63,18 @@ class JinaEmbeddingsService:
         """
         Execute POST request with retry, exponential backoff,
         jitter, and Retry-After support.
+
+        Args:
+            client : httpx.AsyncClient
+                The active HTTP client session.
+            url : str
+                API endpoint path.
+            payload : dict
+                The request body.
+
+        Returns:
+            dict
+                The parsed JSON response.
         """
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -133,7 +144,15 @@ class JinaEmbeddingsService:
 
     def _compute_backoff(self, attempt: int) -> float:
         """
-        Compute exponential backoff with jitter.
+        Compute exponential backoff with jitter to avoid 'thundering herd' issues.
+
+        Args:
+            attempt : int
+                The current retry attempt number.
+
+        Returns:
+            float
+                Wait time in seconds.
         """
         base = self.base_backoff * (2 ** (attempt - 1))
         jitter = random.uniform(0, base * 0.3)
@@ -146,19 +165,17 @@ class JinaEmbeddingsService:
         batch_size: int = 100,
         ) -> List[List[float]]:
         """
-        Generate embeddings for text passages.
+        Generate embeddings for text passages in batches.
 
-        Parameters
-        ----------
-        texts : list[str]
-            Text passages to embed.
-        batch_size : int
-            Number of passages per API request.
+        Args:
+            texts : list[str]
+                Text passages to embed.
+            batch_size : int
+                Number of passages per API request.
 
-        Returns
-        -------
-        list[list[float]]
-            Embedding vectors.
+        Returns:
+            list[list[float]]
+                List of embedding vectors.
         """
         client = await self.connector.connect()
         embeddings: List[List[float]] = []
@@ -189,17 +206,15 @@ class JinaEmbeddingsService:
 
     async def embed_query(self, query: str) -> List[float]:
         """
-        Generate an embedding for a search query.
+        Generate a specialized embedding for a search query.
 
-        Parameters
-        ----------
-        query : str
-            Query text.
+        Args:
+            query : str
+                Query text.
 
-        Returns
-        -------
-        list[float]
-            Query embedding vector.
+        Returns:
+            list[float]
+                Single query embedding vector.
         """
         client = await self.connector.connect()
 

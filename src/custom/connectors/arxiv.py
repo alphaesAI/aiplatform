@@ -2,6 +2,7 @@ import httpx
 import logging
 from typing import Optional, Dict, Any
 from .base import BaseConnector
+from .schemas import ArxivConfig
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +30,14 @@ class ArxivConnector(BaseConnector):
                 'base_url' (str): API endpoint.
                 'timeout_seconds' (int): Request timeout.
         """
-        self.base_url = config.get("base_url")
-        self.timeout = config.get("timeout_seconds", 10)
+        # Validate the incoming dictionary using Pydantic
+        self.config = ArxivConfig(**config)
+        
+        # Access attributes safely from the validated object
+        self.base_url = self.config.base_url
+        self.timeout = self.config.timeout
         self._client: Optional[httpx.AsyncClient] = None
-
+        
         logger.info(f"ArxivConnector initialized for {self.base_url}")
 
     async def __call__(self) -> httpx.AsyncClient:

@@ -2,50 +2,81 @@ import logging
 import re
 from typing import List, Optional, Dict, Any, Iterator
 
-from .base import BaseTransformer
-from src.custom.schemas import PdfContent, ChunkMetadata, TextChunk
+from ..base import BaseTransformer
+from ..schemas import PdfContent, ChunkMetadata, TextChunk, ChunkingConfig
 
 logger = logging.getLogger(__name__)
 
+"""
+text_chunker.py
+====================================
+Purpose:
+    Handles the fragmentation of structured PDF content into smaller, 
+    overlapping segments. This is optimized for Retrieval-Augmented 
+    Generation (RAG) and vector similarity search.
+"""
+
 class TextChunker(BaseTransformer):
     """
-    Transformer Layer — Text Chunker
-    
     Purpose:
+        Transformer Layer — Text Chunker.
         Takes structured PdfContent and slices it into smaller, 
         overlapping TextChunks for AI/Vector search.
-    """
+    """ 
 
     def __init__(self, data: List[PdfContent], config: Dict[str, Any]):
         """
-        Initialize with parsed PDF objects and chunking settings.
+        Purpose:
+            Initializes the chunker with parsed PDF data and validates 
+            chunking parameters (size, overlap, and minimum limits).
+
+        Args:
+            data (List[PdfContent]): List of parsed PDF content objects.
+            config (Dict[str, Any]): Configuration dictionary containing 'chunking' settings.
         """
         super().__init__(config)
         self.parsed_pdfs = data
         
-        # Pull settings from config or use defaults
-        chunk_cfg = config.get("chunking", {})
-        self.chunk_size = chunk_cfg.get("chunk_size", 600)
-        self.overlap_size = chunk_cfg.get("overlap_size", 120)
-        self.min_chunk_size = chunk_cfg.get("min_chunk_size", 120)
+        # Validate chunking settings via Pydantic
+        # We look for a 'chunking' key in the main config
+        self.chunk_cfg = ChunkingConfig(**config.get("chunking", {}))
+        
+        self.chunk_size = self.chunk_cfg.chunk_size
+        self.overlap_size = self.chunk_cfg.overlap_size
+        self.min_chunk_size = self.chunk_cfg.min_chunk_size
 
         if self.overlap_size >= self.chunk_size:
             raise ValueError("Overlap must be smaller than chunk size")
 
     def __call__(self) -> Iterator[Dict[str, Any]]:
         """
-        Entry point: Processes all PDFs and yields cleaned, indexed chunks.
+        Purpose:
+            Entry point for the chunking process. Iterates through all PDFs 
+            and yields cleaned, indexed chunk records.
+
+        Yields:
+            Iterator[Dict[str, Any]]: Dictionary records formatted for Elasticsearch ingestion.
         """
         for pdf in self.parsed_pdfs:
             # 1. Decide if we use section-aware or raw chunking
             chunks = self._chunk_pdf(pdf)
             
             for chunk in chunks:
-                # 2. Standardize via BaseTransformer.transform
+                # transform() adds the _index and _source needed for Elasticsearch
                 yield self.transform(chunk.model_dump())
 
     def _chunk_pdf(self, pdf: PdfContent) -> List[TextChunk]:
-        """Core logic to route chunking style."""
+        """
+        Purpose:
+            Routes the document to the appropriate chunking logic based 
+            on whether document sections were successfully identified.
+
+        Args:
+            pdf (PdfContent): The structured PDF data.
+
+        Returns:
+            List[TextChunk]: A list of generated text chunks.
+        """
         # Use generic metadata source if arxiv_id is missing
         source_id = pdf.metadata.get("arxiv_id") or pdf.metadata.get("source_file", "unknown")
 
@@ -55,7 +86,18 @@ class TextChunker(BaseTransformer):
         return self._chunk_raw_text(pdf.raw_text, source_id)
 
     def _chunk_by_sections(self, pdf: PdfContent, source_id: str) -> List[TextChunk]:
-        """Slices text while respecting section headers."""
+        """
+        Purpose:
+            Slices text while respecting section headers. Attempts to keep 
+            sections together if they fit within limits, or merges small ones.
+
+        Args:
+            pdf (PdfContent): The structured PDF data.
+            source_id (str): Reference ID for the document.
+
+        Returns:
+            List[TextChunk]: Section-aware chunks.
+        """
         chunks = []
         buffer = []
         buffer_wc = 0
@@ -97,7 +139,20 @@ class TextChunker(BaseTransformer):
         return chunks
 
     def _chunk_raw_text(self, text: str, source_id: str, start_idx: int = 0, section_title: str = "Body") -> List[TextChunk]:
-        """Fallback: Slides a window across text regardless of sections."""
+        """
+        Purpose:
+            Sliding window chunking fallback. Used when sections aren't 
+            available or a single section is too large.
+
+        Args:
+            text (str): Raw string content to chunk.
+            source_id (str): Reference ID for the document.
+            start_idx (int): Current chunk index offset.
+            section_title (str): Title to associate with these chunks.
+
+        Returns:
+            List[TextChunk]: Sequential overlapping chunks.
+        """
         words = re.findall(r"\S+", text)
         
         if len(words) <= self.min_chunk_size:
@@ -119,7 +174,19 @@ class TextChunker(BaseTransformer):
         return chunks
 
     def _build_chunk(self, text: str, idx: int, source_id: str, section_title: str) -> TextChunk:
-        """Constructs the final Pydantic object."""
+        """
+        Purpose:
+            Constructs the final validated Pydantic object with complete metadata.
+
+        Args:
+            text (str): Content of the chunk.
+            idx (int): Global index of the chunk within the document.
+            source_id (str): Document ID (e.g., Arxiv ID).
+            section_title (str): Contextual title for metadata.
+
+        Returns:
+            TextChunk: Validated data model.
+        """
         return TextChunk(
             text=text,
             arxiv_id=source_id,
@@ -127,8 +194,9 @@ class TextChunker(BaseTransformer):
                 chunk_index=idx,
                 section_title=section_title,
                 word_count=len(text.split()),
-                start_char=0, # Simplified
+                start_char=0, 
                 end_char=len(text),
+                # Use validated overlap values
                 overlap_with_previous=self.overlap_size if idx > 0 else 0,
                 overlap_with_next=self.overlap_size
             )

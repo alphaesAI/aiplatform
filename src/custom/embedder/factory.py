@@ -14,7 +14,7 @@ Purpose:
     connector classes based on a string identifier.
 """
 
-class EmbeddingFactory:
+class EmbedderFactory:
     """
     Purpose:
         The Orchestrator class that selects the appropriate connector 

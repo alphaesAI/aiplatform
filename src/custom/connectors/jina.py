@@ -1,7 +1,8 @@
 import httpx
 import logging
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from .base import BaseConnector
+from .schemas import JinaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class JinaConnector(BaseConnector):
     Intended to be extended by concrete API connectors.
     """
 
-    def __init__(self, config: Dict[str, str]):
+    def __init__(self, config: Dict[str, Any]):
         """
         Initialize the HTTP connector.
 
@@ -30,14 +31,15 @@ class JinaConnector(BaseConnector):
         headers : dict[str, str], optional
             Default headers applied to all requests.
         """
-        self.base_url= config["base_url"]
-        self.api_key = config["api_key"]
+        self.config = JinaConfig(**config)
+        
+        self.base_url = self.config.base_url
+        self.api_key = self.config.api_key
+        self.timeout = self.config.timeout
 
         if not self.api_key:
             raise ValueError("Missing api_key for Jina API")
 
-        self.timeout = config["timeout_seconds"]
-        
         self.headers: Dict[str, str] = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
