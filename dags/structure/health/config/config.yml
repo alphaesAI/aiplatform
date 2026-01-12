@@ -1,0 +1,52 @@
+# Health Pipeline Configuration
+# This file centralizes extraction, transformation, and loading settings.
+
+postgres:
+  extraction:
+    source_name: "health_db"
+    tables:
+      - table_name: "users"
+        schema: "public"
+        columns: ["id", "username", "email", "created_at", "updated_at"]
+        extraction_mode: "incremental"
+        incremental_column: "updated_at"
+        batch_size: 1000
+
+      - table_name: "orders"
+        schema: "public"
+        columns: ["order_id", "user_id", "order_date", "total_amount", "status"]
+        extraction_mode: "incremental"
+        incremental_column: "order_date"
+        batch_size: 1000
+
+      - table_name: "products"
+        schema: "public"
+        columns: null  # Selects all (*)
+        extraction_mode: "full"
+        batch_size: 5000
+  
+  transformation:
+    # Reserved for specific RDBMS to JSON mapping rules if needed
+    apply_cleaning: true
+
+elasticsearch:
+  load:
+    index_name: "health_data"
+    settings:
+      index:
+        number_of_shards: 1
+        number_of_replicas: 0
+      analysis:
+        analyzer:
+          health_analyzer:
+            type: custom
+            tokenizer: standard
+            filter: ["lowercase", "stop", "snowball"]
+    mappings:
+      dynamic: true
+      properties:
+        patient_id: {type: keyword}
+        patient_name: {type: text, analyzer: health_analyzer}
+        diagnosis: {type: text}
+        visit_date: {type: date}
+        billing_amount: {type: float}

@@ -17,6 +17,11 @@ gmail_pipeline:
       sentences: true
       minlength: 20
       maxlength: 512
+
+  embeddings:
+    # This was missing!
+    engine: "txtai"
+    model_path: "sentence-transformers/all-MiniLM-L6-v2"
     
   load:
-    index_name: "gmail_index" # Loader uses this to create/verify the index
+    index_name: "gmail_index"

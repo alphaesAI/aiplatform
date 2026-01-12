@@ -1,17 +1,20 @@
+"""
+Module: Health Data Pipeline DAG
+Purpose: Orchestrates RDBMS extraction, JSON transformation, and Elasticsearch loading.
+"""
+
 import warnings
 import logging
 
-# Standard ignore for common Airflow and library warnings
+# Warnings and Logging setup
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-# Specific ignore for the skops/txtai noise
 warnings.filterwarnings("ignore", module="skops")
-
-# Set external loggers to ERROR only to reduce noise
 logging.getLogger("skops").setLevel(logging.ERROR)
 
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
+from typing import Any, Dict, List
 
 # Internal imports
 from src.custom.credentials.factory import CredentialFactory
@@ -21,168 +24,144 @@ from src.custom.transformers.factory import TransformerFactory
 from src.custom.loaders.factory import LoaderFactory
 from src.custom.utils.reader import load_yml
 
-# Setup logger for the DAG
 logger = logging.getLogger(__name__)
 
-"""
-health_dag.py
-====================================
-Purpose:
-    Main Airflow DAG orchestrating the 'Health' data pipeline. 
-    It extracts data from a PostgreSQL database, transforms it into an 
-    Elasticsearch-compatible JSON format, and loads it via bulk ingestion.
-"""
+CONFIG_PATH = "dags/structure/health/config/config.yml"
 
-def psqlcredential(**kwargs):
+# --- Task Functions ---
+
+def psqlcredential_task(**kwargs: Any) -> Dict[str, Any]:
     """
-    Purpose:
-        Retrieves PostgreSQL credentials using the Airflow Connection ID.
-
-    Returns:
-        dict: Standardized credential dictionary.
+    Retrieves PostgreSQL credentials via the CredentialFactory.
+    args:
+    **kwargs: Airflow context arguments.
+    returns:
+    Dict[str, Any]: Database connection parameters (host, user, pass, etc).
     """
-    logger.info("Fetching Postgres credentials via CredentialFactory.")
-    provider = CredentialFactory.get_provider(mode="airflow", conn_id="healthdb")
-    return provider.get_credentials()
+    logger.info("Fetching Postgres credentials.")
+    return CredentialFactory.get_provider(mode="airflow", conn_id="healthdb").get_credentials()
 
-def escredential(**kwargs):
+def escredential_task(**kwargs: Any) -> Dict[str, Any]:
     """
-    Purpose:
-        Retrieves Elasticsearch credentials using the Airflow Connection ID.
-
-    Returns:
-        dict: Standardized credential dictionary.
+    Retrieves Elasticsearch credentials via the CredentialFactory.
+    args:
+    **kwargs: Airflow context arguments.
+    returns:
+    Dict[str, Any]: ES connection parameters.
     """
-    logger.info("Fetching Elasticsearch credentials via CredentialFactory.")
-    provider = CredentialFactory.get_provider(mode="airflow", conn_id="elasticsearch")
-    return provider.get_credentials()
+    logger.info("Fetching Elasticsearch credentials.")
+    return CredentialFactory.get_provider(mode="airflow", conn_id="elasticsearch").get_credentials()
 
-def extraction(ti, **kwargs):
+def extraction_task(ti: Any, **kwargs: Any) -> Dict[str, Any]:
     """
-    Purpose:
-        Connects to RDBMS and extracts raw data as a Python dictionary.
-
-    Args:
-        ti (TaskInstance): Airflow Task Instance for XCom pulling.
-
-    Returns:
-        dict: Raw data extracted from specified tables.
+    Connects to RDBMS and extracts raw data as a Python dictionary.
+    args:
+    ti: Airflow Task Instance for XCom access.
+    returns:
+    Dict[str, Any]: Raw data extracted from specified tables.
     """
-    creds = ti.xcom_pull(task_ids='psqlcredential_task')
-    if not creds:
-        error_msg = "Extraction failed: No Postgres credentials found in XCom."
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-    
-    config_path = "dags/structure/health/config/extractor.yml"
-    full_yml = load_yml(config_path)
-    extract_config = full_yml.get("postgres", {}).get("extraction", {})
+    creds = ti.xcom_pull(task_ids='get_psql_creds')
+    config = load_yml(CONFIG_PATH).get("postgres", {}).get("extraction", {})
 
-    logger.info("Initializing RDBMS connector and establishing connection.")
     connector = ConnectorFactory.get_connector(connector_type="rdbms", config=creds)
-    connection = connector()
+    connection = connector() # Established SQLAlchemy connection
 
     try:
         extractor = ExtractorFactory.get_extractor(
             extractor_type="rdbms", 
             connection=connection, 
-            config=extract_config
+            config=config
         )
-        data_json = extractor() 
-        logger.info("Data extraction from RDBMS successful.")
-        return data_json 
+        return extractor() 
     finally:
-        logger.debug("Closing RDBMS database connection.")
         connection.close()
 
-def process_and_load(ti, **kwargs):
+def transformation_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
     """
-    Purpose:
-        Orchestrates the Transform-and-Load phase. It uses a Generator 
-        to stream data from the Transformer to the Loader without 
-        loading the entire transformed dataset into memory.
-
-    Args:
-        ti (TaskInstance): Airflow Task Instance for XCom pulling.
+    Transforms raw RDBMS rows into Elasticsearch-ready JSON actions.
+    args:
+    ti: Airflow Task Instance for XCom access.
+    returns:
+    List[Dict[str, Any]]: List of transformed actions for bulk loading.
     """
-    # Pull data and credentials
-    raw_data = ti.xcom_pull(task_ids='extraction_task')
-    es_creds = ti.xcom_pull(task_ids='escredential_task')
+    raw_data = ti.xcom_pull(task_ids='extract_health_data')
+    # Load configuration for indexing logic
+    config = load_yml(CONFIG_PATH).get("elasticsearch", {}).get("load", {})
 
-    if not raw_data:
-        error_msg = "Process and Load failed: No raw data received from extraction task."
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-
-    # Load configuration
-    config_path = "dags/structure/health/config/loader.yml"
-    loader_config = load_yml(config_path).get("elasticsearch", {}).get("load", {})
-
-    # --- TRANSFORM ---
-    logger.info("Initializing JsonTransformer to create actions generator.")
-    transformer_obj = TransformerFactory.get_transformer(
+    transformer = TransformerFactory.get_transformer(
         transformer_type="json",
         data=raw_data,
-        config=loader_config
+        config=config
     )
     
-    # This creates the generator iterator
-    actions_generator = transformer_obj()
+    # We convert the generator to a list to pass through XCom
+    return list(transformer())
 
-    # --- LOAD ---
-    logger.info("Initializing Elasticsearch connector for ingestion.")
+def loading_task(ti: Any, **kwargs: Any) -> None:
+    """
+    Ingests transformed JSON data into Elasticsearch via Bulk API.
+    args:
+    ti: Airflow Task Instance for XCom access.
+    returns:
+    None: Logs loading status.
+    """
+    transformed_data = ti.xcom_pull(task_ids='transform_health_data')
+    es_creds = ti.xcom_pull(task_ids='get_es_creds')
+    config = load_yml(CONFIG_PATH).get("elasticsearch", {}).get("load", {})
+
     connector = ConnectorFactory.get_connector(connector_type="elasticsearch", config=es_creds)
     es_connection = connector()
 
-    loader_obj = LoaderFactory.get_loader(
-        load_type="bulk",
+    loader = LoaderFactory.get_loader(
+        load_type="elasticsearch",
         connection=es_connection,
-        config=loader_config
+        config=config
     )
 
-    logger.info("Starting bulk ingestion to Elasticsearch via generator streaming.")
-    loader_obj(data=actions_generator)
-    logger.info("Pipeline execution finished: Successfully transformed and loaded data.")
+    loader(data=transformed_data)
+    logger.info("Health data ingestion successful.")
 
 # --- DAG Definition ---
 
-
-
 default_args = {
-    'owner': 'data_team',
-    'retries': 0,
-    'retry_delay': timedelta(minutes=2)
+    'owner': 'alpha_team',
+    'retries': 0
 }
 
 with DAG(
     'health_data_pipeline',
     default_args=default_args,
-    start_date=datetime(2025, 1, 1),
-    schedule="@daily",
+    start_date=datetime(2026, 1, 1),
+    schedule="@monthly",
     catchup=False,
-    doc_md=__doc__,
-    tags=["structure", "health"]
+    max_active_runs=1,
+    tags=["structure", "health", "postgres"]
 ) as dag:
 
-    psql_creds_task = PythonOperator(
-        task_id='psqlcredential_task',
-        python_callable=psqlcredential,
+    get_psql_creds = PythonOperator(
+        task_id='get_psql_creds',
+        python_callable=psqlcredential_task
     )
 
-    es_creds_task = PythonOperator(
-        task_id='escredential_task',
-        python_callable=escredential,
+    get_es_creds = PythonOperator(
+        task_id='get_es_creds',
+        python_callable=escredential_task
     )
 
-    extract_task = PythonOperator(
-        task_id='extraction_task',
-        python_callable=extraction,
+    extract_health_data = PythonOperator(
+        task_id='extract_health_data',
+        python_callable=extraction_task
     )
 
-    transform_and_load_task = PythonOperator(
-        task_id='transform_and_load_task',
-        python_callable=process_and_load,
+    transform_health_data = PythonOperator(
+        task_id='transform_health_data',
+        python_callable=transformation_task
+    )
+
+    load_to_es = PythonOperator(
+        task_id='load_to_es',
+        python_callable=loading_task
     )
 
     # Dependency Flow
-    [psql_creds_task, es_creds_task] >> extract_task >> transform_and_load_task
+    get_psql_creds >> get_es_creds >> extract_health_data >> transform_health_data >> load_to_es

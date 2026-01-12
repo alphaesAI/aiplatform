@@ -1,0 +1,35 @@
+arxiv:
+  # Connection Settings
+  base_url: "http://export.arxiv.org/api/query"
+  timeout_seconds: 30
+
+  # Search Settings
+  search_category: "cs.AI" # Artificial Intelligence
+  max_results: 10
+  rate_limit_delay: 3      # Arxiv asks for 3s between requests
+
+  # XML Namespaces (The "Family Names" for the tags)
+  namespaces:
+    atom: "http://www.w3.org/2005/Atom"
+    opensearch: "http://a9.com/-/spec/opensearch/1.1/"
+    arxiv: "http://arxiv.org/schemas/atom"
+
+  # Downloader Settings
+  download_dir: "/tmp/aiplatform/arxiv/downloads"
+  max_retries: 3
+  retry_backoff: 2
+
+docling:
+  # Transformer Settings
+  pdf_dir: "/tmp/aiplatform/arxiv"
+  max_pages: 20
+  max_file_size_mb: 15
+  max_concurrency: 4
+  do_ocr: false
+  do_table_structure: true
+
+chunker:
+  # Text Chunking Settings
+  chunk_size: 600
+  overlap_size: 120
+  min_chunk_size: 150
