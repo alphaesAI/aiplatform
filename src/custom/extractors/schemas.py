@@ -23,10 +23,19 @@ class RDBMSExtractorConfig(BaseModel):
     # This validates that 'tables' is a list of RDBMSTableConfig objects
     tables: List[RDBMSTableConfig]
 
+# --- 1. Downloader Specific Config (Infrastructure) ---
+class ArxivDownloaderConfig(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    
+    download_dir: str = Field(default="/tmp/aiplatform/arxiv/downloads")
+    rate_limit_delay: float = Field(default=3.0)
+    max_retries: int = Field(default=3)
+    retry_backoff: int = Field(default=2)
+
+# --- 2. Extractor Specific Config (Logic) ---
 class ArxivExtractorConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    # API Metadata Settings
     base_url: str = Field(default="https://export.arxiv.org/api/query")
     search_category: str = Field(default="cs.AI")
     max_results: int = Field(default=10)
@@ -35,9 +44,5 @@ class ArxivExtractorConfig(BaseModel):
         "opensearch": "http://a9.com/-/spec/opensearch/1.1/",
         "arxiv": "http://arxiv.org/schemas/atom"
     })
-
-    # Infrastructure/Downloader Settings
-    download_dir: str = Field(default="/tmp/aiplatform/arxiv/downloads")
-    rate_limit_delay: float = Field(default=3.0)
-    max_retries: int = Field(default=3)
-    retry_backoff: int = Field(default=2)
+    
+    downloader: ArxivDownloaderConfig = Field(default_factory=ArxivDownloaderConfig)

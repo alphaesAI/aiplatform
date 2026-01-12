@@ -6,6 +6,7 @@ from .gmail import GmailConnector
 from .arxiv import ArxivConnector
 from .elasticsearch import ElasticsearchConnector
 from .opensearch import OpensearchConnector
+from .jina import JinaConnector
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,8 @@ class ConnectorFactory:
             return ElasticsearchConnector(config=config)
         elif connector_type == "opensearch":
             return OpensearchConnector(config=config)
+        elif connector_type == "jina":
+            return JinaConnector(config=config)
         else:
             error_msg = f"Unsupported connector type: {connector_type}"
             logger.error(error_msg)

@@ -31,11 +31,12 @@ class TxtaiEmbeddings:
     def available() -> bool:
         return TXTAI_AVAILABLE
 
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, data: Iterator[Dict[str, Any]], config: Dict[str, Any]):
         """
         Purpose: Initializes the embedding engine with a specific model.
 
         Args:
+            data (Iterator[Dict[str, Any]]): Stream of records in Elasticsearch format.
             config (Dict[str, Any]): Configuration containing 'path' for the model.
         
         Raises:
@@ -48,23 +49,21 @@ class TxtaiEmbeddings:
                 "to use the TxtaiEmbeddings module."
             )
 
+        self.data = data
         self.config = EmbeddingsConfig(**config)
         self.engine = EmbEngine(self.config.model_dump())
         logger.info(f"Embeddings engine initialized with model: {self.config.path}")
 
-    def embed(self, data: Iterator[Dict[str, Any]]) -> Iterator[Dict[str, Any]]:
+    def embed(self) -> Iterator[Dict[str, Any]]:
         """
         Purpose: 
             Iterates through records and adds a 'vector' field to the '_source'.
             This is designed to work seamlessly with the Transformer output.
 
-        Args:
-            data (Iterator[Dict[str, Any]]): Stream of records in Elasticsearch format.
-
         Yields:
             Dict[str, Any]: Records updated with vector embeddings.
         """
-        for record in data:
+        for record in self.data:
             source_data = record.get("_source", {})
             text = source_data.get("text", "")
             

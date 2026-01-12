@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Any
 
 from .downloader import ArxivDownloader
 from ..base import BaseExtractor
-from ..schemas import ArxivExtractorConfig
+from ..schemas import ArxivExtractorConfig, ArxivDownloaderConfig
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class ArxivExtractor(BaseExtractor):
         Coordinates metadata fetching and PDF downloading.
     """
 
-    def __init__(self, connector, config: Dict[str, str]):
+    def __init__(self, connector, config: Dict[str, Any]):
         """
         Purpose: Initializes the extractor with a connector and configuration.
 
@@ -35,10 +35,14 @@ class ArxivExtractor(BaseExtractor):
             config (Dict[str, str]): Configuration dictionary for categories and limits.
         """
         self.connector = connector
+        # Validate main extractor config
         self.config = ArxivExtractorConfig(**config)
-        self._last_request_time: Optional[float] = None
+        
+        # Validate and inject the downloader-specific config
+        downloader_cfg = ArxivDownloaderConfig(**config)
+        self.downloader = ArxivDownloader(connector, downloader_cfg)
 
-        self.downloader = ArxivDownloader(connector, config)
+        self._last_request_time: Optional[float] = None
 
         logger.info(f"ArxivExtractor initialized for category: {self.config.search_category}")
 
@@ -97,6 +101,7 @@ class ArxivExtractor(BaseExtractor):
 
         await self._rate_limit()
 
+        # Logic: Use kwarg override if provided, otherwise fallback to validated config
         max_results = max_results or self.config.max_results
         category = self.config.search_category
 
@@ -134,22 +139,23 @@ class ArxivExtractor(BaseExtractor):
             List[Dict]: Normalized metadata fields.
         """
         root = ET.fromstring(xml_data)
-        entries = root.findall("atom:entry", self.ns)
+        # Fix: Access namespaces through the validated Pydantic config
+        entries = root.findall("atom:entry", self.config.namespaces)
         results = []
 
         for entry in entries:
             paper = {
-                "arxiv_id": entry.find("atom:id", self.ns).text.split("/")[-1],
-                "title": entry.find("atom:title", self.ns).text.strip(),
-                "abstract": entry.find("atom:summary", self.ns).text.strip(),
-                "published_date": entry.find("atom:published", self.ns).text,
+                "arxiv_id": entry.find("atom:id", self.config.namespaces).text.split("/")[-1],
+                "title": entry.find("atom:title", self.config.namespaces).text.strip(),
+                "abstract": entry.find("atom:summary", self.config.namespaces).text.strip(),
+                "published_date": entry.find("atom:published", self.config.namespaces).text,
                 "authors": [
-                    a.find("atom:name", self.ns).text
-                    for a in entry.findall("atom:author", self.ns)
+                    a.find("atom:name", self.config.namespaces).text
+                    for a in entry.findall("atom:author", self.config.namespaces)
                 ],
                 "categories": [
                     c.get("term")
-                    for c in entry.findall("atom:category", self.ns)
+                    for c in entry.findall("atom:category", self.config.namespaces)
                 ],
                 "pdf_url": self._get_pdf(entry),
             }
@@ -167,7 +173,8 @@ class ArxivExtractor(BaseExtractor):
         Returns:
             str: The URL of the PDF document.
         """
-        for link in entry.findall("atom:link", self.ns):
+        # Fix: Access namespaces through the validated Pydantic config
+        for link in entry.findall("atom:link", self.config.namespaces):
             if link.get("type") == "application/pdf":
                 return link.get("href")
         return ""
@@ -178,7 +185,7 @@ class ArxivExtractor(BaseExtractor):
         """
         if self._last_request_time is not None:
             elapsed = time.time() - self._last_request_time
-            if elapsed < self.rate_limit_delay:
-                await asyncio.sleep(self.rate_limit_delay - elapsed)
+            # Fix: Use rate_limit_delay from validated config
+            if elapsed < self.config.rate_limit_delay:
+                await asyncio.sleep(self.config.rate_limit_delay - elapsed)
         self._last_request_time = time.time()
-

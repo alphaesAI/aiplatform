@@ -8,7 +8,7 @@ from ..schemas import ArxivDownloaderConfig
 logger = logging.getLogger(__name__)
 
 """
-arxiv_downloader.py
+downloader.py
 ====================================
 Purpose:
     Handles the physical downloading of PDF files from arXiv. 

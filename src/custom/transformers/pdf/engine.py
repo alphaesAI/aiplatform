@@ -8,7 +8,7 @@ from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
-from ..schemas import DoclingConfig
+from ..schemas import DoclingConfig, PdfContent
 
 logger = logging.getLogger(__name__)
 

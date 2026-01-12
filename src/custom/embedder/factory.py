@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from .esai import EsaiEmbeddings
+from .txtai import TxtaiEmbeddings
 from .jina import JinaEmbeddingsService
 
 logger = logging.getLogger(__name__)
@@ -22,30 +22,31 @@ class EmbedderFactory:
     """
 
     @classmethod
-    def get_embedding(cls, embedding_type: str, config: Any):
+    def get_embedder(cls, embedder_type: str, data: Any, config: Any):
         """
         Purpose:
             Instantiates the requested connector class using the provided config.
 
         Args:
-            embedding_type (str): The type identifier ('esai', 'jina', etc.).
+            embedder_type (str): The type identifier ('esai', 'jina', etc.).
+            data (Any): Data to be embedded.
             config (Any): Configuration data required by the chosen connector.
 
         Returns:
             Object: An instance of the requested connector class.
             
         Raises:
-            ValueError: If the embedding_type is not recognized.
+            ValueError: If the embedder_type is not recognized.
         """
-        logger.info(f"Factory creating connector for: {embedding_type}")
+        logger.info(f"Factory creating connector for: {embedder_type}")
         
-        embedding_type = embedding_type.lower()
+        embedder_type = embedder_type.lower()
         
-        if embedding_type == "esai":
-            return EsaiEmbeddings(config=config)
-        elif embedding_type == "jina":
-            return JinaEmbeddingsService(config=config)
+        if embedder_type == "txtai":
+            return TxtaiEmbeddings(data=data, config=config)
+        elif embedder_type == "jina":
+            return JinaEmbeddingsService(data=data, config=config)
         else:
-            error_msg = f"Unsupported embedding type: {embedding_type}"
+            error_msg = f"Unsupported embedder type: {embedder_type}"
             logger.error(error_msg)
             raise ValueError(error_msg)

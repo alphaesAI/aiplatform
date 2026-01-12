@@ -1,6 +1,6 @@
 import logging
-from .elasticsearch import BulkIngestor
-from .opensearch import BulkIngestor
+from .elasticsearch import ElasticsearchBulkIngestor
+from .opensearch import OpensearchBulkIngestor
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +36,9 @@ class LoaderFactory:
         load_type = load_type.lower().strip()
 
         if load_type == "elasticsearch":
-            return BulkIngestor(connection=connection, config=config)
+            return ElasticsearchBulkIngestor(connection=connection, config=config)
         elif load_type == "opensearch":
-            return BulkIngestor(connection=connection, config=config)
+            return OpensearchBulkIngestor(connection=connection, config=config)
         else:
             error_msg = f"Loader type '{load_type}' is not supported."
             logger.error(error_msg)

@@ -1,13 +1,13 @@
 import logging
 
-from .factory import EmbeddingFactory
-from .esai import EsaiEmbeddings
+from .factory import EmbedderFactory
+from .txtai import TxtaiEmbeddings
 from .jina import JinaEmbeddingsService
 
 # Define the public API for the package
 __all__ = [
-    "EmbeddingFactory",
-    "EsaiEmbeddings",
+    "EmbedderFactory",
+    "TxtaiEmbeddings",
     "JinaEmbeddingsService",
 ]
 
