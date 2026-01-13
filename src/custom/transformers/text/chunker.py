@@ -58,8 +58,12 @@ class TextChunker(BaseTransformer):
             Iterator[Dict[str, Any]]: Dictionary records formatted for Elasticsearch ingestion.
         """
         for pdf in self.parsed_pdfs:
+            actual_data = pdf.get("_source", pdf)
+            # 1. RE-VALIDATION: Convert Dict back to PdfContent object
+            # This allows you to use dot notation (pdf.metadata) again.
+            pdf_obj = PdfContent(**actual_data) if isinstance(actual_data, dict) else actual_data
             # 1. Decide if we use section-aware or raw chunking
-            chunks = self._chunk_pdf(pdf)
+            chunks = self._chunk_pdf(pdf_obj)
             
             for chunk in chunks:
                 # transform() adds the _index and _source needed for Elasticsearch

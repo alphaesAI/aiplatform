@@ -24,17 +24,17 @@ class ArxivDownloader:
         multiple download tasks.
     """
 
-    def __init__(self, connector, config: ArxivDownloaderConfig):
+    def __init__(self, connection, config: ArxivDownloaderConfig):
         """
         Purpose:
             Initializes the downloader, ensures the destination directory exists, 
             and sets up operational limits.
 
         Args:
-            connector: Shared connection object providing the HTTP client.
+            connection: Shared connection object providing the HTTP client.
             config (ArxivDownloaderConfig): Schema-validated configuration object.
         """
-        self.connector = connector
+        self.connection = connection
         
         # Folder setup
         self.download_dir = Path(config.download_dir)
@@ -92,7 +92,7 @@ class ArxivDownloader:
         await self._rate_limit()
         
         # Use the SHARED client from the connector
-        client = await self.connector()
+        client = await self.connection()
 
         logger.info(f"Downloading: {arxiv_id}")
 

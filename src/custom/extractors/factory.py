@@ -44,7 +44,7 @@ class ExtractorFactory:
             return RDBMSExtractor(connection=connection, config=config)
         elif extractor_type == "gmail":
             return GmailExtractor(connection=connection, config=config)
-        elif extractor_type == "arxivparser":
+        elif extractor_type == "arxiv":
             return ArxivExtractor(connection=connection, config=config)
         else:
             error_msg = f"Unknown extractor type: {extractor_type}"

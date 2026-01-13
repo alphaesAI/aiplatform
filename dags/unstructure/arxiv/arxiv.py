@@ -66,9 +66,15 @@ def extraction_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
     # Merge credentials with search settings
     full_config = {**config, **creds}
     
-    # Connector provides the HTTP session, Extractor handles the API/Download logic
+    # 1. Get the connector first
     connector = ConnectorFactory.get_connector(connector_type="arxiv", config=full_config)
-    extractor = ExtractorFactory.get_extractor(extractor_type="arxiv", connector=connector, config=full_config)
+    
+    # 2. Pass it to the extractor
+    extractor = ExtractorFactory.get_extractor(
+        extractor_type="arxiv", 
+        connection=connector, 
+        config=full_config
+    )
     
     # Arxiv extractor returns a list of dictionaries with metadata and local_pdf_path
     papers = asyncio.run(extractor.extract())
@@ -141,8 +147,8 @@ def loading_task(ti: Any, **kwargs: Any) -> None:
     """
     enriched_data = ti.xcom_pull(task_ids='embed_chunks')
     es_creds = ti.xcom_pull(task_ids='get_es_creds')
-    config = load_yml(CONFIG_PATH).get('arxiv', {}) # Pulls index name from arxiv section
-
+    config = load_yml(CONFIG_PATH).get('elasticsearch', {}).get('load', {})
+    
     connector = ConnectorFactory.get_connector(connector_type="elasticsearch", config=es_creds)
     es_conn = connector()
     
@@ -152,7 +158,7 @@ def loading_task(ti: Any, **kwargs: Any) -> None:
 
 # --- DAG Definition ---
 
-default_args = {'owner': 'alpha_team', 'retries': 1}
+default_args = {'owner': 'alpha_team', 'retries': 0}
 
 with DAG(
     'arxiv_full_pipeline',
@@ -178,4 +184,4 @@ with DAG(
     t7 = PythonOperator(task_id='load_to_elasticsearch', python_callable=loading_task)
 
     # Execution Flow
-    [t1, t2] >> t3 >> t4 >> t5 >> t6 >> t7
+    t1 >> t2 >> t3 >> t4 >> t5 >> t6 >> t7

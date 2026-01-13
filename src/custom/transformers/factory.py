@@ -47,7 +47,7 @@ class TransformerFactory:
             return JsonTransformer(data, config)
         
         elif transformer_type == "chunker":
-            return TextChunker(config)
+            return TextChunker(data, config)
         
         elif transformer_type == "pdf":
             return PDFTransformer(data, config)

@@ -26,21 +26,21 @@ class ArxivExtractor(BaseExtractor):
         Coordinates metadata fetching and PDF downloading.
     """
 
-    def __init__(self, connector, config: Dict[str, Any]):
+    def __init__(self, connection, config: Dict[str, Any]):
         """
         Purpose: Initializes the extractor with a connector and configuration.
 
         Args:
-            connector: Shared connection object (ArxivConnector).
+            connection: Shared connection object (ArxivConnector).
             config (Dict[str, str]): Configuration dictionary for categories and limits.
         """
-        self.connector = connector
+        self.connection = connection
         # Validate main extractor config
         self.config = ArxivExtractorConfig(**config)
         
         # Validate and inject the downloader-specific config
         downloader_cfg = ArxivDownloaderConfig(**config)
-        self.downloader = ArxivDownloader(connector, downloader_cfg)
+        self.downloader = ArxivDownloader(connection, downloader_cfg)
 
         self._last_request_time: Optional[float] = None
 
@@ -122,7 +122,7 @@ class ArxivExtractor(BaseExtractor):
         url = f"{self.config.base_url}?{urlencode(params, quote_via=quote, safe=':+[]*')}"
 
         logger.info(f"Requesting Arxiv feed: {url}")
-        client = await self.connector() # Reusing shared connection
+        client = await self.connection() 
         response = await client.get(url)
         response.raise_for_status()
 

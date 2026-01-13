@@ -116,3 +116,18 @@ class TextChunk(BaseModel):
     text: str
     metadata: ChunkMetadata
     arxiv_id: str  # This links the chunk back to the original paper
+
+class ParsingException(Exception):
+    """Base exception for parsing-related errors."""
+
+
+class PDFParsingException(ParsingException):
+    """Base exception for PDF parsing-related errors."""
+
+
+class PDFValidationError(PDFParsingException):
+    """Exception raised when PDF file validation fails."""
+
+
+class PDFDownloadException(Exception):
+    """Base exception for PDF download-related errors."""
