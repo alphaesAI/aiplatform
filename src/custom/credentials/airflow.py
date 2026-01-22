@@ -58,11 +58,11 @@ class AirflowCredentials(CredentialProvider):
                 **conn.extra_dejson  # Merges extras (like verify_certs, schema, etc.)
             }
             
-            # Validate with Pydantic
             # This ensures 'port' is an int and 'password' is treated as a secret
             validated_conn = AirflowConnectionSchema(**creds)
             logger.debug(f"Successfully unpacked credentials for {self.conn_id}")
             
+            # Converts a validated Pydantic object back into a standard Python dictionary.
             return validated_conn.model_dump()
 
         except Exception as e:
