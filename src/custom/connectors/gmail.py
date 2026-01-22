@@ -57,9 +57,11 @@ class GmailConnector:
             logger.info("Initializing Gmail API service...")
             try:
                 token_info = self.config.token_dict
+                target_scopes = self.config.scopes 
+                
                 creds = Credentials.from_authorized_user_info(
                     token_info,
-                    scopes=['https://www.googleapis.com/auth/gmail.readonly']
+                    scopes=target_scopes
                 )
                 self._service = build('gmail', 'v1', credentials=creds, cache_discovery=False)
                 logger.info("Gmail service successfully built.")

@@ -2,43 +2,42 @@ import httpx
 import logging
 from typing import Optional, Dict, Any
 from .base import BaseConnector
-from .schemas import ArxivConfig
+from .schemas import ApiConfig
 
 logger = logging.getLogger(__name__)
 
 """
-arxiv.py
+api.py
 ====================================
 Purpose:
-    Handles asynchronous HTTP connections to the Arxiv API using httpx.
+    Handles asynchronous HTTP connections to the API using httpx.
 """
 
-class ArxivConnector(BaseConnector):
+class ApiConnector(BaseConnector):
     """
     Purpose:
         Responsible for managing the lifecycle of an AsyncClient for 
-        efficient, persistent HTTP requests to Arxiv.
+        efficient, persistent HTTP requests to API.
     """
 
     def __init__(self, config: Dict[str, Any]):
         """
         Purpose:
-            Initialize ArxivConnector settings.
+            Initialize ApiConnector settings.
 
         Args:
             config (Dict): 
-                'base_url' (str): API endpoint.
-                'timeout_seconds' (int): Request timeout.
+                'api_key' (str): API key.
+                'timeout' (int): Request timeout.
         """
         # Validate the incoming dictionary using Pydantic
-        self.config = ArxivConfig(**config)
+        self.config = ApiConfig(**config)
         
         # Access attributes safely from the validated object
-        self.base_url = self.config.base_url
         self.timeout = self.config.timeout
         self._client: Optional[httpx.AsyncClient] = None
         
-        logger.info(f"ArxivConnector initialized for {self.base_url}")
+        logger.info("ApiConnector initialized")
 
     async def __call__(self) -> httpx.AsyncClient:
         """
@@ -62,10 +61,21 @@ class ArxivConnector(BaseConnector):
             httpx.AsyncClient (connection object): Active HTTP client instance.
         """
         if self._client is None:
-            logger.info("Creating new HTTP client session for Arxiv.")
-            self._client = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout)
+            # 1. Logic for Jina (or any API with a key)
+            if self.config.api_key:
+                logger.info("API Key found. Creating authenticated client.")
+                headers = {
+                    "Authorization": f"Bearer {self.config.api_key}",
+                    "Content-Type": "application/json"
+                }
+                self._client = httpx.AsyncClient(headers=headers, timeout=self.timeout)
+            
+            # 2. Logic for Arxiv (No key, no headers parameter passed)
+            else:
+                logger.info("No API Key. Creating clean client for Arxiv.")
+                self._client = httpx.AsyncClient(timeout=self.timeout)
         else:
-            logger.debug("Reusing existing Arxiv HTTP client session.")
+            logger.debug("Reusing existing API HTTP client session.")
         
         return self._client
 
@@ -81,7 +91,7 @@ class ArxivConnector(BaseConnector):
             None
         """
         if self._client:
-            logger.info("Closing Arxiv HTTP client session.")
+            logger.info("Closing API HTTP client session.")
             await self._client.aclose()
             self._client = None
         else:

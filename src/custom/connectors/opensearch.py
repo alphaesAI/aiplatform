@@ -58,17 +58,17 @@ class OpensearchConnector:
         protocol = self.config.schema_type
         host = self.config.host
         port = self.config.port
-        openserach_host = f"{protocol}://{host}:{port}"
+        opensearch_host = f"{protocol}://{host}:{port}"
         
-        logger.info(f"Attempting to connect to OpenSearch at {openserach_host}")
+        logger.info(f"Attempting to connect to OpenSearch at {opensearch_host}")
 
         self._client = OpenSearch(
-            [openserach_host],
+            [opensearch_host],
             verify_certs=self.config.verify_certs
         )
 
         if not self._client.ping():
-            error_msg = f"Could not connect to OpenSearch at {openserach_host}"
+            error_msg = f"Could not connect to OpenSearch at {opensearch_host}"
             logger.error(error_msg)
             raise ConnectionError(error_msg)
         
