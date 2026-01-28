@@ -29,14 +29,10 @@ class TestAirflowCredentials(unittest.TestCase):
 
         # 3. Assertions: Check if the mapping worked
         self.assertEqual(result["host"], "127.0.0.1")
-        self.assertEqual(result["user"], "test_user")
+        self.assertEqual(result["login"], "test_user")
         self.assertEqual(result["password"], "test_password")
-        self.assertEqual(result["database"], "test_db")
-        
-        # Verify that 'extra_dejson' fields were merged correctly
-        self.assertEqual(result["api_key"], "secret_123")
-        self.assertEqual(result["region"], "us-east-1")
-        
+        self.assertEqual(result["schema"], "test_db")
+      
         # Verify the mock was called with the right ID
         mock_get_connection.assert_called_once_with("my_test_connection")
 

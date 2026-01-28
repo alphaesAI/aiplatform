@@ -12,8 +12,9 @@ class TestGmailConnector(unittest.TestCase):
                 "refresh_token": "fake-refresh",
                 "client_id": "fake-id",
                 "client_secret": "fake-secret"
-            }
-        }
+            },
+            "scopes": ["https://www.googleapis.com/auth/gmail.readonly"]
+       }
 
     @patch("src.custom.connectors.gmail.build")
     @patch("src.custom.connectors.gmail.Credentials")
@@ -39,7 +40,7 @@ class TestGmailConnector(unittest.TestCase):
         # Verify from_authorized_user_info was called with our token_dict
         mock_creds_class.from_authorized_user_info.assert_called_once_with(
             self.fake_config["token_dict"],
-            scopes=['https://www.googleapis.com/auth/gmail.readonly']
+            scopes=self.fake_config["scopes"]
         )
         
         # Verify 'build' was called correctly

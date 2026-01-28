@@ -7,7 +7,7 @@ class TestElasticsearchConnector(unittest.TestCase):
     def setUp(self):
         """This runs before every test to set up the basic config."""
         self.valid_config = {
-            "schema_type": "http",
+            "schema": "http",
             "host": "localhost",
             "port": 9200,
             "verify_certs": False

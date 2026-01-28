@@ -7,8 +7,8 @@ class TestRDBMSConnector(unittest.TestCase):
     def setUp(self):
         """Setup a standard database config."""
         self.config = {
-            "db_type": "postgresql",
-            "username": "user",
+            "type": "postgresql",
+            "login": "user",
             "password": "pass",
             "host": "localhost",
             "port": 5432,
