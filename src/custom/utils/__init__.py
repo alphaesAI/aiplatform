@@ -7,8 +7,10 @@ Purpose:
 """
 
 from .reader import load_yml, load_pickle
+from .converter import ExcelToCsvUtil
 
 __all__ = [
     "load_yml",
-    "load_pickle"
+    "load_pickle",
+    "ExcelToCsvUtil"
 ]
