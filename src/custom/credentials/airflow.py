@@ -52,19 +52,36 @@ class AirflowCredentials(CredentialProvider):
             creds = {
                 "host": conn.host,
                 "port": conn.port,
-                "user": conn.login,
+                "login": conn.login,
                 "password": conn.password,
-                "database": conn.schema, 
+                "schema": conn.schema, 
                 **conn.extra_dejson  # Merges extras (like verify_certs, schema, etc.)
             }
-            
+            logger.info(f"Unpacking creds for {self.conn_id}. Keys found: {list(creds.keys())}")
             # This ensures 'port' is an int and 'password' is treated as a secret
             validated_conn = AirflowConnectionSchema(**creds)
             logger.debug(f"Successfully unpacked credentials for {self.conn_id}")
             
             # Converts a validated Pydantic object back into a standard Python dictionary.
-            return validated_conn.model_dump()
+            return validated_conn.model_dump(exclude_none=True)
 
         except Exception as e:
             logger.exception(f"Failed to retrieve Airflow connection: {self.conn_id}")
             raise
+
+
+
+        # if conn.conn_type in ["postgres", "mysql", "rdbms"]:
+        #         # In Airflow, the database name is stored in 'schema'
+        #         creds["database"] = conn.schema
+            
+        #     elif conn.conn_type == "elasticsearch":
+        #         # In ES, 'schema' refers to the protocol (http/https)
+        #         creds["schema"] = conn.schema or "http"
+
+        #     # 3. Merge extras (like verify_certs)
+        #     if conn.extra_dejson:
+        #         creds.update(conn.extra_dejson)
+            
+        #     # Clean up: Remove None values so Pydantic doesn't complain about None vs String
+        #     return {k: v for k, v in creds.items() if v is not None}
