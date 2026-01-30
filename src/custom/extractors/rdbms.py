@@ -1,3 +1,5 @@
+# Note: need to update the rows to generator
+
 import logging
 from sqlalchemy import text
 from typing import Dict, Any, List
@@ -52,7 +54,7 @@ class RDBMSExtractor(BaseExtractor):
 
         for table in tables:
             name = table.table_name
-            schema = table.schema_name
+            schema = table.schema
             cols = table.columns
 
             column_query = "*" if not cols else ", ".join(cols)
@@ -72,3 +74,4 @@ class RDBMSExtractor(BaseExtractor):
                 raise e
         
         return results
+        

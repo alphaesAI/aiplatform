@@ -143,6 +143,15 @@ class GmailExtractor(BaseExtractor):
         headers = payload.get('headers', [])
         allowed_headers = self.config.fields
         
+        """ 
+        from this,
+        [
+            {"name": "Subject", "value": "Hello World"},
+        ] 
+        to this,
+        {
+            "subject": "Hello World",
+        }"""
         metadata = {
             h.get('name', '').lower(): h.get('value') 
             for h in headers 

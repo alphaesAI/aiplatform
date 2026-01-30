@@ -130,7 +130,7 @@ class ArxivExtractor(BaseExtractor):
 
     def _parse_xml(self, xml_data: str) -> List[Dict]:
         """
-        Purpose: Parses the Arxiv Atom XML response into a Python list of dictionaries.
+        Parses the Arxiv Atom XML response into a Python list of dictionaries.
 
         Args:
             xml_data (str): Raw XML string from the API.
@@ -165,7 +165,7 @@ class ArxivExtractor(BaseExtractor):
 
     def _get_pdf(self, entry) -> str:
         """
-        Purpose: Extracts the PDF link from an Atom entry.
+        Extracts the PDF link from an Atom entry.
 
         Args:
             entry: XML element representing a paper entry.
@@ -181,11 +181,25 @@ class ArxivExtractor(BaseExtractor):
 
     async def _rate_limit(self):
         """
-        Purpose: Internal helper to ensure Arxiv API rate limits are respected.
+        Ensures a minimum time gap between API requests to avoid being blocked by arXiv.
         """
+        # 1. Check if this is NOT the first request of the session.
+        # If self._last_request_time is None, we've never made a request, so we skip to the end.
         if self._last_request_time is not None:
+            
+            # 2. Calculate how many seconds have passed since the literal moment the last request finished.
+            # current_time (e.g., 10.5s) - last_time (e.g., 10.0s) = 0.5s elapsed.
             elapsed = time.time() - self._last_request_time
-            # Fix: Use rate_limit_delay from validated config
+            
+            # 3. Compare the time passed against your required wait (e.g., 3.0 seconds).
+            # If only 0.5s passed, we are "too fast" and need to wait.
             if elapsed < self.config.rate_limit_delay:
+                
+                # 4. Calculate the "remaining" time and pause execution.
+                # (3.0s delay - 0.5s elapsed) = 2.5s remaining to sleep.
+                # 'await' allows the computer to do other tasks while waiting here.
                 await asyncio.sleep(self.config.rate_limit_delay - elapsed)
+            
+        # 5. The gate opens! Record the current timestamp as the new 'last_request_time'.
+        # This becomes the 'old' time for the NEXT call to this function.
         self._last_request_time = time.time()
