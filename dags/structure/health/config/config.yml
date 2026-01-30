@@ -1,5 +1,4 @@
-# Health Pipeline Configuration
-# This file centralizes extraction, transformation, and loading settings.
+#Note: Test the transformation - applying cleaning
 
 postgres:
   extraction:
@@ -10,24 +9,24 @@ postgres:
         columns: ["id", "username", "email", "created_at", "updated_at"]
         extraction_mode: "incremental"
         incremental_column: "updated_at"
-        batch_size: 1000
+        batch_size: 10
 
       - table_name: "orders"
         schema: "public"
         columns: ["order_id", "user_id", "order_date", "total_amount", "status"]
         extraction_mode: "incremental"
         incremental_column: "order_date"
-        batch_size: 1000
+        batch_size: 10
 
       - table_name: "products"
         schema: "public"
-        columns: null  # Selects all (*)
+        columns: ["id", "name", "price", "stock", "created_at", "updated_at"]
         extraction_mode: "full"
-        batch_size: 5000
+        batch_size: 10
   
-  transformation:
-    # Reserved for specific RDBMS to JSON mapping rules if needed
-    apply_cleaning: true
+  # transformation:
+  #   # Reserved for specific RDBMS to JSON mapping rules if needed
+  #   apply_cleaning: true
 
 elasticsearch:
   load:

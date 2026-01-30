@@ -164,4 +164,8 @@ with DAG(
     )
 
     # Dependency Flow
-    get_psql_creds >> get_es_creds >> extract_health_data >> transform_health_data >> load_to_es
+    get_psql_creds >> extract_health_data >> transform_health_data >> load_to_es
+
+    get_es_creds
+
+    [transform_health_data, get_es_creds] >> load_to_es
