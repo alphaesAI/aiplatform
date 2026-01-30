@@ -28,12 +28,12 @@ class JinaEmbeddingsService:
     Jina Embeddings v3 via a shared JinaConnector.
     """
 
-    def __init__(self, connector: JinaConnector, config: Dict[str, Any]):
+    def __init__(self, connection, config: Dict[str, Any]):
         """
         Initialize embeddings service.
 
         Args:
-            connector : JinaConnector
+            connection : 
                 Initialized HTTP connector for Jina API.
             config : dict
                 Required keys:
@@ -43,10 +43,10 @@ class JinaEmbeddingsService:
                 - dimensions (int)
                 - tasks (dict)
         """
-        self.connector = connector
+        self.connection = connection
         
         self.max_retries: int = config.get("max_retries", 5)
-        self.base_backoff: float = config.get("base_backoff", 1.0)
+        self.base_backoff: float = config.get("base_backoff", 1.0)  # secondsbase_backoff is the initial delay (in seconds) applied before the very first retry attempt.
         
         # Embedding config
         self.model = config["model"]
@@ -80,64 +80,40 @@ class JinaEmbeddingsService:
             try:
                 response = await client.post(url, json=payload)
 
-                # ---- Rate limit handling ----
+                # Rate Limits: The server says "You are sending requests too fast!"
                 if response.status_code == 429:
                     retry_after = response.headers.get("Retry-After")
-                    delay = (
-                        float(retry_after)
-                        if retry_after
-                        else self.base_backoff * (2 ** (attempt - 1))
-                    )
+                    delay = (float(retry_after) if retry_after else self.base_backoff * (2 ** (attempt - 1)))
 
-                    logger.warning(
-                        "Rate limited (429). Retry %d/%d in %.2fs",
-                        attempt,
-                        self.max_retries,
-                        delay,
-                    )
+                    logger.warning("Rate limited (429). Retry %d/%d in %.2fs", attempt, self.max_retries, delay)
                     await asyncio.sleep(delay)
                     continue
 
                 response.raise_for_status()
                 return response.json()
 
+            # network lag: The server took too long to answer
             except httpx.TimeoutException:
                 delay = self._compute_backoff(attempt)
-                logger.warning(
-                    "Timeout. Retry %d/%d in %.2fs",
-                    attempt,
-                    self.max_retries,
-                    delay,
-                )
+                logger.warning("Timeout. Retry %d/%d in %.2fs", attempt, self.max_retries, delay)
                 await asyncio.sleep(delay)
 
+            # 500-599 (Server Error) & 400-499 (Client Error)
             except httpx.HTTPStatusError as e:
                 status = e.response.status_code
 
-                # Retry only on 5xx
                 if 500 <= status < 600:
                     delay = self._compute_backoff(attempt)
-                    logger.warning(
-                        "Server error %s. Retry %d/%d in %.2fs",
-                        status,
-                        attempt,
-                        self.max_retries,
-                        delay,
-                    )
+                    logger.warning("Server error %s. Retry %d/%d in %.2fs", status, attempt, self.max_retries, delay,)
                     await asyncio.sleep(delay)
                 else:
                     logger.error("Non-retriable HTTP error: %s", status)
                     raise
 
+            # Network Failures: Wi-Fi dropped or the DNS failed.
             except httpx.HTTPError as e:
                 delay = self._compute_backoff(attempt)
-                logger.warning(
-                    "Network error. Retry %d/%d in %.2fs | %s",
-                    attempt,
-                    self.max_retries,
-                    delay,
-                    e,
-                )
+                logger.warning("Network error. Retry %d/%d in %.2fs | %s", attempt, self.max_retries, delay, e)
                 await asyncio.sleep(delay)
 
         raise RuntimeError("Max retries exceeded for embeddings request")
@@ -145,6 +121,7 @@ class JinaEmbeddingsService:
     def _compute_backoff(self, attempt: int) -> float:
         """
         Compute exponential backoff with jitter to avoid 'thundering herd' issues.
+        Jitter is just intentional randomness added to a wait timer.
 
         Args:
             attempt : int
@@ -177,7 +154,7 @@ class JinaEmbeddingsService:
             list[list[float]]
                 List of embedding vectors.
         """
-        client = await self.connector.connect()
+        client = await self.connection.connect()
         embeddings: List[List[float]] = []
 
         for i in range(0, len(texts), batch_size):
@@ -188,13 +165,11 @@ class JinaEmbeddingsService:
                 task=self.tasks["passage"],
                 dimensions=self.dimensions,
                 input=batch,
-                )
-
-            response_json = await self._post(
-                client,
-                "/embeddings",
-                payload.model_dump(),
+                late_chunking=False,
+                embedding_type="float"
             )
+
+            response_json = await self._post(client, "embeddings", payload.model_dump())
 
             result = JinaEmbeddingResponse(**response_json)
             embeddings.extend([item["embedding"] for item in result.data])
@@ -202,7 +177,7 @@ class JinaEmbeddingsService:
             logger.debug("Embedded %d passages", len(batch))
 
         logger.info("Generated %d passage embeddings", len(embeddings))
-        return embeddings
+        return embeddings   
 
     async def embed_query(self, query: str) -> List[float]:
         """
@@ -216,20 +191,18 @@ class JinaEmbeddingsService:
             list[float]
                 Single query embedding vector.
         """
-        client = await self.connector.connect()
+        client = await self.connection.connect()
 
         payload = JinaEmbeddingRequest(
             model=self.model,
             task=self.tasks["query"],
             dimensions=self.dimensions,
             input=[query],
+            late_chunking=False,
+            embedding_type="float"
         )
 
-        response_json = await self._post(
-            client,
-            "/embeddings",
-            payload.model_dump(),
-        )
+        response_json = await self._post(client, "embeddings", payload.model_dump())
 
         result = JinaEmbeddingResponse(**response_json)
         return result.data[0]["embedding"]
