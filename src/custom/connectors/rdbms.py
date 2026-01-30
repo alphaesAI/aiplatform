@@ -61,8 +61,8 @@ class RDBMSConnector:
             Exception: If the database connection or test query fails.
         """
         url_params = {
-            "drivername": self.config.db_type,
-            "username": self.config.username,
+            "drivername": self.config.type,
+            "username": self.config.login,
             "password": self.config.password,
             "host": self.config.host,
             "port": self.config.port,

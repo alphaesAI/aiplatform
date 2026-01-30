@@ -34,6 +34,10 @@ class ElasticsearchConnector:
                            Expected keys: 'schema', 'host', 'port'.
                            Optional keys: 'verify_certs'.
         """
+        # If Airflow put the schema in 'database', move it to 'schema'
+        if config.get("database") and not config.get("schema"):
+            config["schema"] = config.pop("database")
+        
         self.config = ElasticsearchConfig(**config)
         self._client = None
         logger.debug("ESConnector initialized with config keys: %s", list(config.keys()))
@@ -66,7 +70,7 @@ class ElasticsearchConnector:
         Raises:
             ConnectionError: If the client fails to ping the Elasticsearch host.
         """
-        protocol = self.config.schema_type
+        protocol = self.config.schema
         host = self.config.host
         port = self.config.port
 
