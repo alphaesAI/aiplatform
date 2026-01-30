@@ -58,3 +58,17 @@ Key Features
 - Semantic Search: Integration with `txtai` enables the generation of vector embeddings for powerful semantic search capabilities.
 - Airflow Orchestration: Data pipelines are defined and managed as Airflow DAGs, providing scheduling, monitoring, and logging.
 - Configuration-Driven Pipelines: The pipelines are configured using YAML files, making them easy to manage and modify without changing the core code.
+
+
+
+
+source:     arxiv
+            url - pdf url - parse content (arxiv id, text, meta data) - **Embedding** (jina) (arxiv id, text, meta data, vector) - elastic search
+
+            gmail
+            attachments - parse content (email id, text, meta data) - **Embedding** (txtai) (email id, text, meta data, vector) - elasticsearch
+
+            rdbms
+            postgresql - extract data - transformer - **Embeddings** - elasticsearch
+
+search:     user query - **Embedding** (jina) - llm - agents - hybrid search - retrieve - hello + vector - elasticsearch - Ans:-
