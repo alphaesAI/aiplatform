@@ -61,10 +61,11 @@ class DocumentTransformer(BaseTransformer):
         logger.info(f"Starting document transformation for {len(raw_records)} records.")
         
         for raw_record in raw_records:
+            # Strict validation of input record
             record = TransformerInputRecord(**raw_record)
 
             # Create a list of things to process (text + paths)
-            to_process = []
+            to_process = []     # list becomes list of strings [text, path1, path2]
             if record.body:
                 to_process.append(record.body)
             
@@ -86,6 +87,7 @@ class DocumentTransformer(BaseTransformer):
                     id=f"{record.id}#chunk{i}",
                     text=clean_text,
                     source_id=record.source_id,
+                    source=record.source,
                     metadata=record.metadata
                 )
 

@@ -3,8 +3,7 @@ from typing import Any, Dict
 
 from .document import DocumentTransformer
 from .json_transformer import JsonTransformer
-from .pdf import PDFTransformer
-from .text import TextChunker
+from .arxiv import PDFTransformer, TextChunker
 
 logger = logging.getLogger(__name__)
 

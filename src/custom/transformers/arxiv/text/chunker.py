@@ -2,8 +2,8 @@ import logging
 import re
 from typing import List, Optional, Dict, Any, Iterator
 
-from ..base import BaseTransformer
-from ..schemas import PdfContent, ChunkMetadata, TextChunk, ChunkingConfig
+from ...base import BaseTransformer
+from ...schemas import PdfContent, ChunkMetadata, TextChunk, ChunkingConfig
 
 logger = logging.getLogger(__name__)
 

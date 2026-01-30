@@ -8,9 +8,8 @@ Purpose:
 
 from .factory import TransformerFactory
 from .base import BaseTransformer
-from .pdf import DoclingEngine, PDFTransformer
-from .text import TextChunker
-from .schemas import DoclingConfig
+from .arxiv import DoclingEngine, PDFTransformer, TextChunker
+from .schemas import *
 
 __all__ = [
     "TransformerFactory",
@@ -18,5 +17,4 @@ __all__ = [
     "DoclingEngine",
     "PDFTransformer",
     "TextChunker",
-    "DoclingConfig",
 ]

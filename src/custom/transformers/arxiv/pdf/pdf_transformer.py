@@ -3,9 +3,9 @@ import asyncio
 from pathlib import Path
 from typing import Dict, Any, List, Union, Optional
 
-from ..base import BaseTransformer
+from ...base import BaseTransformer
 from .engine import DoclingEngine  
-from ..schemas import PdfContent, DoclingConfig, PDFValidationError
+from ...schemas import PdfContent, DoclingConfig, PDFValidationError
 
 logger = logging.getLogger(__name__)
 

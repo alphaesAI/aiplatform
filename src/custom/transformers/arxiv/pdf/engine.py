@@ -2,13 +2,13 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-from ..base import BaseTransformer
+from ...base import BaseTransformer
 import pypdfium2 as pdfium
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
-from ..schemas import DoclingConfig, PdfContent, PDFValidationError, PDFParsingException, PaperFigure, PaperSection, PaperTable, ParserType
+from ...schemas import DoclingConfig, PdfContent, PDFValidationError, PDFParsingException, PaperFigure, PaperSection, PaperTable, ParserType
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class DoclingEngine(BaseTransformer):
         self.config = DoclingConfig(**config)
         
         self.max_pages = self.config.max_pages
-        # Math is cleaner now
+        # e.g., max_file_size_mb: 10 -> 10 * 1024 * 1024 = 10,485,760 bytes
         self.max_file_size_bytes = self.config.max_file_size_mb * 1024 * 1024
 
         pipeline_options = PdfPipelineOptions(
@@ -89,7 +89,7 @@ class DoclingEngine(BaseTransformer):
         if not pdf_path.exists():
             raise PDFValidationError(f"File not found: {pdf_path}")
 
-        size = pdf_path.stat().st_size
+        size = pdf_path.stat().st_size      # Asks the Operating System for the file size in bytes
         if size == 0:
             raise PDFValidationError("Empty PDF file")
         if size > self.max_file_size_bytes:
@@ -97,7 +97,7 @@ class DoclingEngine(BaseTransformer):
 
         # Check Magic Bytes
         with open(pdf_path, "rb") as f:
-            if not f.read(8).startswith(b"%PDF-"):
+            if not f.read(8).startswith(b"%PDF-"):      # Opens the file and looks at the very first 8 characters. Real PDFs always start with %PDF-
                 raise PDFValidationError("Invalid PDF header: Not a PDF")
 
         # Check Page Count via pypdfium2
@@ -134,7 +134,7 @@ class DoclingEngine(BaseTransformer):
                 max_file_size=self.max_file_size_bytes,
             )
 
-            doc = result.document
+            doc = result.document       # we are pulling the structured content out of the "Result" wrapper so we can start looping through it to build our PaperSection and PaperTable objects.
 
             # 1. EXTRACT SECTIONS
             sections = []
