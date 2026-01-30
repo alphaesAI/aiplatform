@@ -41,7 +41,7 @@ def credentials_task(**kwargs: Any) -> Dict[str, Any]:
     Dict[str, Any]: The credential dictionary including token paths.
     """
     logger.info("Retrieving Gmail credentials.")
-    return CredentialFactory.get_provider(mode="airflow", conn_id="gmail").get_credentials()
+    return CredentialFactory.get_provider(mode="airflow", conn_id="gmailv2").get_credentials()
 
 def es_credentials_task(**kwargs: Any) -> Dict[str, Any]:
     """
@@ -63,7 +63,7 @@ def extraction_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
     List[Dict[str, Any]]: List of extracted raw Gmail records.
     """
     creds = ti.xcom_pull(task_ids='get_credentials')
-    creds['token_dict'] = load_pickle(creds['token_path'])
+    # creds['token_dict'] = load_pickle(creds['token_path'])
     
     full_config = load_yml("dags/unstructure/gmail/config/config.yml")
     gmail_config = full_config.get('gmail_pipeline', {})
@@ -177,4 +177,6 @@ with DAG(
     )
 
     # Execution Flow
-    [get_credentials, get_es_credentials] >> extract_gmail_data >> transform_data >> generate_embeddings >> load_to_es
+    get_credentials >> extract_gmail_data >> transform_data >> generate_embeddings >> load_to_es
+
+    [generate_embeddings, get_es_credentials] >> load_to_es

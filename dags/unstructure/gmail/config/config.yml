@@ -19,9 +19,38 @@ gmail_pipeline:
       maxlength: 512
 
   embeddings:
-    # This was missing!
-    engine: "txtai"
-    model_path: "sentence-transformers/all-MiniLM-L6-v2"
+    path: "sentence-transformers/all-MiniLM-L6-v2"
+    content: true
+    backend: "annoy"
     
   load:
     index_name: "gmail_index"
+    settings:
+      index:
+        number_of_shards: 1
+        number_of_replicas: 0
+      analysis:
+        analyzer:
+          gmail_analyzer:       # Custom analyzer for email content
+            type: custom
+            tokenizer: standard
+            filter: ["lowercase", "stop", "snowball"] # Cleans text, removes "the/and", and stems words
+    mappings:
+      dynamic: true             # Allows extra metadata fields to be indexed automatically
+      properties:
+        id: 
+          type: keyword         # Unique Gmail Message ID (exact match only)
+        source_id: 
+          type: keyword         # The specific email address/account
+        source: 
+          type: keyword         # Constant value 'gmail' for cross-pipeline filtering
+        text: 
+          type: text
+          analyzer: gmail_analyzer # Uses the custom analyzer to make email body searchable
+        embedding: 
+          type: dense_vector    # Stores the AI-generated vector
+          dims: 384             # Matches the MiniLM-L6-v2 model
+          index: true           # Enables Similarity/Semantic search
+          similarity: cosine
+        metadata:
+          type: object          # Container for additional fields (subject, date, etc.)
