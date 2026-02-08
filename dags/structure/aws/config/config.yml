@@ -1,0 +1,14 @@
+extraction:
+    s3_path: "s3://data-engineering-bucket-s3/tiny_commerce.csv"
+    batch_size_mb: 5
+
+transformation:
+    type: "table"
+
+embedding:
+  model_name: "all-MiniLM-L6-v2"  # This is the "model_name"
+  output_column: "row_vector"
+
+loader:
+  index_name: "medical_index"
+  write_mode: "overwrite"

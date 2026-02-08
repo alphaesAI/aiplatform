@@ -20,13 +20,13 @@ from airflow.providers.standard.operators.python import PythonOperator
 from typing import Any, Dict, List
 
 # Factory & Utility Imports
-from src.custom.credentials.factory import CredentialFactory
-from src.custom.connectors.factory import ConnectorFactory
-from src.custom.extractors.factory import ExtractorFactory
-from src.custom.transformers.factory import TransformerFactory
-from src.custom.loaders.factory import LoaderFactory
-from src.custom.embedder.factory import EmbedderFactory
-from src.custom.utils.reader import load_yml, load_pickle
+from src.components.credentials.factory import CredentialFactory
+from src.components.connectors.factory import ConnectorFactory
+from src.components.extractors.factory import ExtractorFactory
+from src.components.transformers.factory import TransformerFactory
+from src.components.loaders.factory import LoaderFactory
+from src.components.embedder.factory import EmbedderFactory
+from src.components.utils.reader import load_yml, load_pickle
 
 logger = logging.getLogger(__name__)
 
