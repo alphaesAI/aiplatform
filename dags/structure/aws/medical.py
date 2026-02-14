@@ -18,7 +18,7 @@ from src.components.extractors.factory import ExtractorFactory
 from src.components.transformers.factory import TransformerFactory
 from src.components.embedder.factory import EmbedderFactory
 from src.components.utils import load_yml
-from src.components.loaders.factory import LoaderFactory
+# from src.components.loaders.factory import LoaderFactory
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +33,16 @@ def s3credentials(**kwargs: Any) -> Dict[str, Any]:
     logger.info("Fetching s3 credentials.")
     return CredentialFactory.get_provider(mode="airflow", conn_id="s3").get_credentials()
 
-def escredential_task(**kwargs: Any) -> Dict[str, Any]:
-    """
-    Retrieves Elasticsearch credentials via the CredentialFactory.
-    args:
-    **kwargs: Airflow context arguments.
-    returns:
-    Dict[str, Any]: ES connection parameters.
-    """
-    logger.info("Fetching Elasticsearch credentials.")
-    return CredentialFactory.get_provider(mode="airflow", conn_id="elasticsearch").get_credentials()
+# def escredential_task(**kwargs: Any) -> Dict[str, Any]:
+#     """
+#     Retrieves Elasticsearch credentials via the CredentialFactory.
+#     args:
+#     **kwargs: Airflow context arguments.
+#     returns:
+#     Dict[str, Any]: ES connection parameters.
+#     """
+#     logger.info("Fetching Elasticsearch credentials.")
+#     return CredentialFactory.get_provider(mode="airflow", conn_id="elasticsearch").get_credentials()
 
 def process_medical_data(**kwargs):
     # 1. Setup Spark & Credentials
@@ -82,27 +82,27 @@ def process_medical_data(**kwargs):
     # We call .persist() so the vectors stay in RAM after the first action
     final_df = embedder_obj(spark).persist()
     
-    # 5. Initialize Loader
-    # We pass 'final_df' here so the Loader has the data reference
-    espark_loader = LoaderFactory.get_loader(
-        load_type="spark",
-        data=final_df,
-        config=full_es_config
-    )
+    # # 5. Initialize Loader
+    # # We pass 'final_df' here so the Loader has the data reference
+    # espark_loader = LoaderFactory.get_loader(
+    #     load_type="spark",
+    #     data=final_df,
+    #     config=full_es_config
+    # )
 
-    # 6. Execution (Triggering the Actions)
-    logger.info("--- Starting Distributed Execution ---")
+    # # 6. Execution (Triggering the Actions)
+    # logger.info("--- Starting Distributed Execution ---")
     
-    # First Action: Show some data (This triggers the S3 -> Transform -> Embed flow)
-    final_df.show(5)
+    # # First Action: Show some data (This triggers the S3 -> Transform -> Embed flow)
+    # final_df.show(5)
     
-    # Second Action: Load to ES (This uses the already computed vectors in RAM)
-    logger.info("Pushing vectors to Elasticsearch...")
-    espark_loader() 
+    # # Second Action: Load to ES (This uses the already computed vectors in RAM)
+    # logger.info("Pushing vectors to Elasticsearch...")
+    # espark_loader() 
 
-    # 7. Cleanup
-    final_df.unpersist()
-    logger.info("Pipeline complete. Memory cleared.")
+    # # 7. Cleanup
+    # final_df.unpersist()
+    # logger.info("Pipeline complete. Memory cleared.")
 
 default_args = {
     'owner': 'alpha_team',
@@ -122,10 +122,10 @@ with DAG(
         python_callable=s3credentials
     )
 
-    es_creds_task = PythonOperator(
-        task_id='escredentials_task', # Used as task_ids in xcom_pull
-        python_callable=escredential_task
-    )
+    # es_creds_task = PythonOperator(
+    #     task_id='escredentials_task', # Used as task_ids in xcom_pull
+    #     python_callable=escredential_task
+    # )
 
     s3_extractor_task = PythonOperator(
         task_id='s3_extractor_task',
@@ -135,4 +135,4 @@ with DAG(
     # Establish the dependency so XCom has data to pull
     s3_creds_task >> s3_extractor_task
 
-    es_creds_task >> s3_extractor_task
+    # es_creds_task >> s3_extractor_task
