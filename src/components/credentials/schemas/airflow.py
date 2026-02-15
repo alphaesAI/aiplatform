@@ -27,3 +27,14 @@ class AirflowConnectionSchema(BaseModel):
     expiry: Optional[str] = None
 
     region_name: Optional[str] = None
+    
+    # Arxiv-specific fields
+    base_url: Optional[str] = None
+    timeout: Optional[int] = None
+    search_category: Optional[str] = None
+    max_results: Optional[int] = None
+    rate_limit_delay: Optional[float] = None
+    download_dir: Optional[str] = None
+    max_retries: Optional[int] = None
+    retry_backoff: Optional[int] = None
+    timeout_seconds: Optional[int] = None

@@ -9,7 +9,6 @@ from .factory import LoaderFactory
 from .base import BaseLoader
 from .elasticsearch import ElasticsearchIngestor, ElasticsearchSingleIngestor, ElasticsearchBulkIngestor
 from .opensearch import OpensearchIngestor, OpensearchSingleIngestor, OpensearchBulkIngestor
-from .spark import ElasticsearchSparkLoader
 from .schemas import IngestorConfig
 
 __all__ = [
@@ -21,6 +20,5 @@ __all__ = [
     "OpensearchIngestor",
     "OpensearchSingleIngestor",
     "OpensearchBulkIngestor",
-    "ElasticsearchSparkLoader",
     "IngestorConfig"
 ]

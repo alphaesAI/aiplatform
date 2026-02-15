@@ -194,6 +194,7 @@ class TextChunker(BaseTransformer):
         return TextChunk(
             text=text,
             arxiv_id=source_id,
+            section_title=section_title,
             metadata=ChunkMetadata(
                 chunk_index=idx,
                 section_title=section_title,

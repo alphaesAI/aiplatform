@@ -3,7 +3,6 @@ from typing import Any, Dict
 from .rdbms import RDBMSExtractor
 from .gmail import GmailExtractor
 from .arxiv import ArxivExtractor
-from .spark import CSVExtractor
 logger = logging.getLogger(__name__)
 
 """
@@ -46,8 +45,6 @@ class ExtractorFactory:
             return GmailExtractor(connection=connection, config=config)
         elif extractor_type == "arxiv":
             return ArxivExtractor(connection=connection, config=config)
-        elif extractor_type == "spark":
-            return CSVExtractor(connection=connection, config=config)
         else:
             error_msg = f"Unknown extractor type: {extractor_type}"
             logger.error(error_msg)

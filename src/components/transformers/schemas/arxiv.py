@@ -29,15 +29,17 @@ class PaperFigure(BaseModel):
 # --- The Configuration Model (Matches your YAML docling section) ---
 class DoclingConfig(BaseModel):
     model_config = ConfigDict(extra="ignore") # Allow extra keys from global config
-    max_pages: int = 10
-    max_file_size_mb: int = 10
+    max_pages: int
+    max_file_size_mb: int
     do_table_structure: bool = False
     do_ocr: bool = False
-    max_concurrency: int = 4
+    max_concurrency: int
 
 # --- The Main Engine Output ---
 class PdfContent(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    
+    # Core PDF content fields
     sections: List[PaperSection]
     figures: List[PaperFigure]
     tables: List[PaperTable]
@@ -45,6 +47,16 @@ class PdfContent(BaseModel):
     references: List[str]
     parser_used: ParserType
     metadata: Dict[str, Any]
+    
+    # Arxiv metadata fields
+    title: str
+    authors: List[str]
+    pdf_url: str
+    abstract: str
+    arxiv_id: str
+    categories: List[str]
+    local_pdf_path: str
+    published_date: str
 
 # --- Custom Engine Exceptions ---
 
@@ -86,4 +98,5 @@ class TextChunk(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str
     arxiv_id: str
+    section_title: str
     metadata: ChunkMetadata

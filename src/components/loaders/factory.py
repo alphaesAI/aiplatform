@@ -1,7 +1,6 @@
 import logging
 from .elasticsearch import ElasticsearchBulkIngestor
 from .opensearch import OpensearchBulkIngestor
-from .spark import ElasticsearchSparkLoader
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +39,6 @@ class LoaderFactory:
             return ElasticsearchBulkIngestor(connection=connection, config=config)
         elif load_type == "opensearch":
             return OpensearchBulkIngestor(connection=connection, config=config)
-        elif load_type == "spark":
-            return ElasticsearchSparkLoader(data=data, config=config)
         else:
             error_msg = f"Loader type '{load_type}' is not supported."
             logger.error(error_msg)

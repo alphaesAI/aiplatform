@@ -40,8 +40,8 @@ class PDFTransformer(BaseTransformer):
         super().__init__(config)
         
         self.pdf_paths = data
-        # Extract the docling sub-dictionary
-        docling_dict = config.get("docling", {})
+        # Use the config directly (DAG already extracted the docling section)
+        docling_dict = config
         
         # This validates everything (concurrency, ocr, etc.)
         self.docling_config = DoclingConfig(**docling_dict)

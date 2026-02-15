@@ -68,20 +68,3 @@ class AirflowCredentials(CredentialProvider):
         except Exception as e:
             logger.exception(f"Failed to retrieve Airflow connection: {self.conn_id}")
             raise
-
-
-
-        # if conn.conn_type in ["postgres", "mysql", "rdbms"]:
-        #         # In Airflow, the database name is stored in 'schema'
-        #         creds["database"] = conn.schema
-            
-        #     elif conn.conn_type == "elasticsearch":
-        #         # In ES, 'schema' refers to the protocol (http/https)
-        #         creds["schema"] = conn.schema or "http"
-
-        #     # 3. Merge extras (like verify_certs)
-        #     if conn.extra_dejson:
-        #         creds.update(conn.extra_dejson)
-            
-        #     # Clean up: Remove None values so Pydantic doesn't complain about None vs String
-        #     return {k: v for k, v in creds.items() if v is not None}

@@ -3,7 +3,6 @@ from typing import Any
 
 from .txtai import TxtaiEmbeddings
 from .jina import JinaEmbeddingsService
-from .spark import SparkEmbedder
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +46,6 @@ class EmbedderFactory:
             return TxtaiEmbeddings(data=data, config=config)
         elif embedder_type == "jina":
             return JinaEmbeddingsService(data=data, config=config)
-        elif embedder_type == "spark":
-            return SparkEmbedder(data=data, config=config)
         else:
             error_msg = f"Unsupported embedder type: {embedder_type}"
             logger.error(error_msg)

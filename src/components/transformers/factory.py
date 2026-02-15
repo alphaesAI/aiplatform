@@ -4,7 +4,6 @@ from typing import Any, Dict
 from .document import DocumentTransformer
 from .json_transformer import JsonTransformer
 from .arxiv import PDFTransformer, TextChunker
-from .spark.table import TableTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +13,7 @@ factory.py
 Purpose:
     Provides a universal entry point for creating specific transformer instances.
 """
+
 
 class TransformerFactory:
     """
@@ -51,9 +51,6 @@ class TransformerFactory:
         
         elif transformer_type == "pdf":
             return PDFTransformer(data, config)
-        
-        elif transformer_type == "table":
-            return TableTransformer(data, config)
         
         else:
             error_msg = f"Unknown transformer type: {transformer_type}"
