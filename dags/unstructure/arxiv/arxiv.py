@@ -131,7 +131,12 @@ def embedder_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
     """
     chunks = ti.xcom_pull(task_ids='chunk_structured_content')
     # Using 'embeddings' key from YAML
-    config = load_yml(CONFIG_PATH).get('embeddings', {})
+    full_config = load_yml(CONFIG_PATH)
+    config = full_config.get('embeddings', {})
+    
+    logger.info(f"Full YAML config keys: {list(full_config.keys())}")
+    logger.info(f"Embeddings config: {config}")
+    logger.info(f"Embeddings config type: {type(config)}")
     
     # Standardized Factory call matching the Gmail pattern
     embedder = EmbedderFactory.get_embedder(embedder_type="txtai", data=chunks, config=config)

@@ -14,7 +14,7 @@ from src.components.utils import load_yml
 
 logger = logging.getLogger(__name__)
 
-# Path to your updated YAML
+# Path to our updated YAML
 CONFIG_PATH = "/home/logi/github/alphaesai/aiplatform/dags/structure/aws/config/config.yml"
 config = load_yml(CONFIG_PATH)
 
@@ -54,14 +54,14 @@ def spark_pipeline_task(**context):
     
     # 3. Embed
     embedder = EmbedderFactory.create("spark", transformed_df, config["embedding"])
-    embedded_df = embedder.embed()
+    embedded_df = embedder.embed()      # id, text, metadata, row_vector
     
     # 4. Save to Checkpoint (Crucial for passing data to next task)
     checkpoint_path = config["elasticsearch"]["checkpoint_path"]
     logger.info(f"Saving processed data to {checkpoint_path}")
     embedded_df.write.mode("overwrite").parquet(checkpoint_path)
     
-    return checkpoint_path
+    return checkpoint_path      # checkpoint_path
 
 def loader_task(**context):
     """

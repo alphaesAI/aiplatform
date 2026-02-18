@@ -34,4 +34,6 @@ def test_chunking_sliding_window(chunker_config):
     # Chunk 2: words 8-15
     assert len(results) == 2
     assert results[0]["_source"]["metadata"]["chunk_index"] == 0
+    assert results[0]["_source"]["section_title"] == "Body"
     assert results[1]["_source"]["metadata"]["chunk_index"] == 1
+    assert results[1]["_source"]["section_title"] == "Body"

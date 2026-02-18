@@ -1,7 +1,6 @@
 import logging
 from .airflow import AirflowCredentials
-# Assuming LocalCredentials exists in local.py
-# from .local import LocalCredentials 
+from .local.credentials import LocalCredentialProvider 
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +42,7 @@ class CredentialFactory:
             return AirflowCredentials(conn_id)
         
         elif mode == "local":
-            # Note: Ensure LocalCredentials is imported/defined
-            # return LocalCredentials(conn_id)
-            logger.warning("Local mode requested but LocalCredentials implementation was not provided in snippet.")
-            raise NotImplementedError("LocalCredentials not yet implemented.")
+            return LocalCredentialProvider(conn_id)
         
         else:
             error_msg = f"Unknown mode: {mode}. Use 'airflow' or 'local'."

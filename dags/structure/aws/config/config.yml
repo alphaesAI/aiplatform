@@ -25,10 +25,18 @@ embedding:
 elasticsearch:
   host: "localhost"
   port: 9200
+  username: "elastic"
+  password: "123456"
   index_name: "sales_data"
   write_mode: "append"
   vector_column: "row_vector"
   checkpoint_path: "file:///home/logi/github/alphaesai/aiplatform/static/health_data/embedder"
+  # SSL Configuration - Different formats for different components
+  use_ssl: "true"
+  verify_ssl: "true"
+  ssl_pem_path: "/home/logi/github/alphaesai/aiplatform/secrets/http_ca.crt"
+  ssl_jks_path: "/home/logi/github/alphaesai/aiplatform/secrets/truststore.jks"
+  jks_password: "changeit"
   settings:
     index:
       number_of_shards: 1
