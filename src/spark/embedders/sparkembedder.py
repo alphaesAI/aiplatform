@@ -3,6 +3,7 @@ from typing import Iterator
 import pandas as pd
 from pyspark.sql import DataFrame
 from pyspark.sql.types import ArrayType, FloatType
+from pyspark.sql.functions import pandas_udf
 from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
@@ -44,4 +45,12 @@ class SparkEmbedder:
                 yield batch_df
 
         # 4. Trigger the distributed transformation
-        return self.data.mapInPandas(embed_batches, schema=output_schema)
+        # Use withColumn to avoid schema resolution issues
+        @pandas_udf(ArrayType(FloatType()))
+        def embed_udf(text_series: pd.Series) -> pd.Series:
+            # This runs on workers, need to load model here
+            model = SentenceTransformer(model_name)
+            embeddings = model.encode(text_series.tolist(), show_progress_bar=False)
+            return pd.Series(embeddings.tolist())
+        
+        return self.data.withColumn(output_col, embed_udf(self.data["text"]))

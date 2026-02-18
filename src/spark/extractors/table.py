@@ -42,6 +42,13 @@ class TableExtractor:
         self.connection.conf.set("spark.sql.files.maxPartitionBytes", str(size_in_bytes))
 
         logger.info(f"Preparing lazy read ({format_type}) from {s3_path}")
+        # Log some key Spark configs for debugging
+        try:
+            logger.info(f"Spark access key set: {bool(self.connection.conf.get('spark.hadoop.fs.s3a.access.key'))}")
+            logger.info(f"Spark region set: {self.connection.conf.get('spark.hadoop.fs.s3a.region')}")
+            logger.info(f"Spark endpoint set: {self.connection.conf.get('spark.hadoop.fs.s3a.endpoint')}")
+        except:
+            logger.info("Could not read Spark configs")
 
         # 4. Dynamic Reader: Apply format-specific options (header, delimiter, etc.)
         # This replaces hardcoded .option("header", "true")
@@ -51,11 +58,14 @@ class TableExtractor:
         for key, value in custom_options.items():
             reader = reader.option(key, str(value))
 
-        # 5. Return the DataFrame
-        # getattr(reader, 'csv')(path) is the same as reader.csv(path)
-        # This allows the format to change without changing the code.
+        # 5. Execute Read with Timeout Protection
         try:
+            logger.info(f"Attempting to read: {s3_path}")
             df = getattr(reader, format_type)(s3_path)
+            logger.info(f"Successfully read DataFrame with {df.count()} rows")
             return df
+        except Exception as e:
+            logger.error(f"Failed to read {s3_path}: {str(e)}")
+            raise
         except AttributeError:
             raise ValueError(f"Unsupported Spark format: {format_type}")

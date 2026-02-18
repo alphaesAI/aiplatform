@@ -35,6 +35,8 @@ class SparkConnector:
                 .config("spark.jars.packages", ",".join(packages)) \
                 .config("spark.hadoop.fs.s3a.access.key", self.config.login) \
                 .config("spark.hadoop.fs.s3a.secret.key", self.config.password) \
+                .config("spark.hadoop.fs.s3a.region", self.config.region_name) \
+                .config("spark.hadoop.fs.s3a.endpoint", self.config.host) \
                 .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
                 .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
                 .config("spark.hadoop.fs.s3a.committer.name", "magic") \

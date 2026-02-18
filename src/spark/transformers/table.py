@@ -1,5 +1,9 @@
+import logging
+
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, lower, trim, concat_ws, struct
+
+logger = logging.getLogger(__name__)
 
 class TableTransformer:
     def __init__(self, data: DataFrame, config: dict):
@@ -32,11 +36,19 @@ class TableTransformer:
         df_normalized = df.select(*select_columns)
 
         # 4. Final Projection
-        # Note: Excluding id from metadata to save space
+        # Note: Excluding id/text from metadata to save space
         metadata_cols = [c for c in df_normalized.columns if c not in [id_col_name]]
-
+        
+        # Create a universal text field by concatenating ALL columns
+        # This makes the pipeline work with any dataset
+        text_col = concat_ws(" ", *[col(c).cast("string") for c in metadata_cols])
+        
+        # Debug: Log available columns
+        logger.info(f"Available columns after transformation: {df_normalized.columns}")
+        logger.info(f"Creating universal text field from all columns")
+        
         return df_normalized.select(
             col(id_col_name).alias("id"),
-            concat_ws(" ", *[col(c).cast("string") for c in metadata_cols]).alias("text"),
+            text_col.alias("text"),
             struct(*metadata_cols).alias("metadata")
         )
