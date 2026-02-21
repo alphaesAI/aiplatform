@@ -34,10 +34,11 @@ gmail:
     extraction_mode: full
     fields: ["subject", "from", "to", "date"]
     temp_dir: /data/gmail_attachments #configurable storage
-    
+
 elasticsearch:
   load:
     index_name: "health_data"
+    ingest_mode: single #single or bulk
     settings:
       index:
         number_of_shards: 1

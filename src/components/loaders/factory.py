@@ -1,6 +1,8 @@
 import logging
-from .elasticsearch import ElasticsearchBulkIngestor
-from .opensearch import OpensearchBulkIngestor
+from .elasticsearch import (ElasticsearchBulkIngestor,ElasticsearchSingleIngestor)
+from .opensearch import (OpensearchBulkIngestor,OpensearchSingleIngestor)
+from .spark import ElasticsearchSparkLoader
+from .schemas.ingestor import IngestorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +36,38 @@ class LoaderFactory:
         """
         logger.info(f"LoaderFactory creating '{load_type}' loader.")
         load_type = load_type.lower().strip()
+        
+        # Parse config to read ingest_mode safely
+        ingestor_config = IngestorConfig(**config)
+        ingest_mode = ingestor_config.ingest_mode.lower()
 
         if load_type == "elasticsearch":
-            return ElasticsearchBulkIngestor(connection=connection, config=config)
+            if ingest_mode == "single":
+                return ElasticsearchSingleIngestor(
+                    connection=connection,
+                    config=config
+                )
+            else:  # default = bulk
+                return ElasticsearchBulkIngestor(
+                    connection=connection,
+                    config=config
+                )
+
         elif load_type == "opensearch":
-            return OpensearchBulkIngestor(connection=connection, config=config)
+            if ingest_mode == "single":
+                return OpensearchSingleIngestor(
+                    connection=connection,
+                    config=config
+                )
+            else:  # default = bulk
+                return OpensearchBulkIngestor(
+                    connection=connection,
+                    config=config
+                )
+
+        elif load_type == "spark":
+            return ElasticsearchSparkLoader(data=data, config=config)
+
         else:
             error_msg = f"Loader type '{load_type}' is not supported."
             logger.error(error_msg)
