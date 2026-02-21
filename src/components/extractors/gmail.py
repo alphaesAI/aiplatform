@@ -94,9 +94,17 @@ class GmailExtractor(BaseExtractor):
         file_paths = []
         parts = payload.get('parts', [])
         
+         # Decide base directory(config-driven)
+        if self.config.temp_dir:
+            base_dir = Path(self.config.temmp_dir)
+        else:
+            #safe default (projec-local, not /tmp)
+            base_dir = Path.cwd() / ".tmp" / "gmail" / "attachments"
+
         # Define relative path using Pathlib
-        base_path = Path("/tmp/aiplatform/gmail/extractors") / msg_id
-        logger.info(f"PHYSICAL PATH: {base_path.absolute()}")
+        #base_path = Path("/tmp/aiplatform/gmail/extractors") / msg_id
+        base_path = base_dir / msg_id
+        logger.info(f"Gmail attachment storage path: {base_path.absolute()}")
         base_path.mkdir(parents=True, exist_ok=True)
 
         for part in parts:

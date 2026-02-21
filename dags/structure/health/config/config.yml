@@ -27,7 +27,14 @@ postgres:
   # transformation:
   #   # Reserved for specific RDBMS to JSON mapping rules if needed
   #   apply_cleaning: true
-
+gmail:
+  extraction:
+    query: "has:attachment"
+    batch_size: 10
+    extraction_mode: full
+    fields: ["subject", "from", "to", "date"]
+    temp_dir: /data/gmail_attachments #configurable storage
+    
 elasticsearch:
   load:
     index_name: "health_data"
