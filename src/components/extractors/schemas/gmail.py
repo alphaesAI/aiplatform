@@ -8,3 +8,7 @@ class GmailExtractorConfig(BaseModel):
     fields: list[str]
     #NEW: configurable attachment storage
     temp_dir: Optional[str] = None
+
+    # New: date-based filtering (optional)
+    start_date: Optional[str] = None #format:YYYY-MM-DD
+    end_date: Optional[str] = None #format: YYYY-MM-DD
