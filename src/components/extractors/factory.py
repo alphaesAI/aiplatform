@@ -3,6 +3,8 @@ from typing import Any, Dict
 from .rdbms import RDBMSExtractor
 from .gmail import GmailExtractor
 from .arxiv import ArxivExtractor
+from .elasticsearch import ElasticsearchExtractor
+from .opensearch import OpensearchExtractor
 logger = logging.getLogger(__name__)
 
 """
@@ -45,6 +47,10 @@ class ExtractorFactory:
             return GmailExtractor(connection=connection, config=config)
         elif extractor_type == "arxiv":
             return ArxivExtractor(connection=connection, config=config)
+        elif extractor_type == "elasticsearch":
+            return ElasticsearchExtractor(connection=connection, config=config)
+        elif extractor_type == "opensearch":
+            return OpensearchExtractor(connection=connection, config=config)
         else:
             error_msg = f"Unknown extractor type: {extractor_type}"
             logger.error(error_msg)
