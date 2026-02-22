@@ -1,5 +1,11 @@
+""" 
+Note:
+    Tey to remove the reader & try to alternative for getattr
+"""
+
 import logging
 from pyspark.sql import SparkSession, DataFrame
+from .schemas.table import TableExtractorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +20,7 @@ class TableExtractor:
         :param config: Dictionary containing 'path', 'format', and 'options'
         """
         self.connection = connection
-        self.config = config
+        self.config = TableExtractorConfig(**config)
         logger.debug("TableExtractor initialized.")
 
     def __call__(self) -> DataFrame:
@@ -25,10 +31,11 @@ class TableExtractor:
         """
         Sets partition strategy and returns a Spark DataFrame (Lazy Blueprint).
         """
-        # 1. Get configuration from YAML, set defaults if missing
-        s3_path = self.config.get("path")
-        format_type = self.config.get("format", "csv") # Supports 'csv', 'parquet', 'json'
-        batch_size_mb = self.config.get("batch_size_mb", 20)
+        # 1. Get configuration from validated config
+        s3_path = self.config.path
+        format_type = self.config.format
+        batch_size_mb = self.config.batch_size_mb
+        custom_options = self.config.options or {}
         
         if not s3_path:
             raise ValueError("Configuration 'path' is required for extraction.")
@@ -53,7 +60,6 @@ class TableExtractor:
         # 4. Dynamic Reader: Apply format-specific options (header, delimiter, etc.)
         # This replaces hardcoded .option("header", "true")
         reader = self.connection.read
-        custom_options = self.config.get("options", {})
         
         for key, value in custom_options.items():
             reader = reader.option(key, str(value))

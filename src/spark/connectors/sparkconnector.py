@@ -1,3 +1,6 @@
+""" 
+Note:es and styles package is not needed 
+"""
 import logging
 from pyspark.sql import SparkSession
 from .schemas.sparkconnector import SparkConnectorConfig

@@ -1,51 +1,26 @@
 import logging
-from typing import Iterator
 import pandas as pd
 from pyspark.sql import DataFrame
 from pyspark.sql.types import ArrayType, FloatType
 from pyspark.sql.functions import pandas_udf
 from sentence_transformers import SentenceTransformer
+from .schemas.sparkembedder import SparkEmbedderConfig
 
 logger = logging.getLogger(__name__)
 
 class SparkEmbedder:
     def __init__(self, data: DataFrame, config: dict):
         self.data = data
-        self.config = config
-        self.model_name = config.get("model_name", "all-MiniLM-L6-v2")
-        self.output_col = config.get("output_column", "row_vector")
+        self.config = SparkEmbedderConfig(**config)
+        self.model_name = self.config.model_name
+        self.output_col = self.config.output_column
 
     def embed(self) -> DataFrame:
         # 1. Capture variables for the closure
         model_name = self.model_name
         output_col = self.output_col
         
-        # 2. Define the schema of the result
-        # mapInPandas requires us to define the schema we are returning
-        output_schema = self.data.schema.add(output_col, ArrayType(FloatType()))
-
-        # 3. The Map Function (Runs on Workers)
-        def embed_batches(iterator: Iterator[pd.DataFrame]) -> Iterator[pd.DataFrame]:
-            # --- SETUP: Runs ONCE per worker process ---
-            logger.info(f"Loading model {model_name} on worker...")
-            model = SentenceTransformer(model_name)
-            
-            for batch_df in iterator:
-                # --- EXECUTION: Runs for every batch ---
-                # Generate embeddings for the 'text' column values
-                embeddings = model.encode(
-                    batch_df["text"].tolist(), 
-                    show_progress_bar=False
-                )
-                
-                # Add the vectors as a new column in the Pandas DataFrame
-                batch_df[output_col] = embeddings.tolist()
-                
-                # Yield the updated batch back to Spark
-                yield batch_df
-
-        # 4. Trigger the distributed transformation
-        # Use withColumn to avoid schema resolution issues
+        # 2. Create pandas UDF for distributed embedding generation
         @pandas_udf(ArrayType(FloatType()))
         def embed_udf(text_series: pd.Series) -> pd.Series:
             # This runs on workers, need to load model here
@@ -53,4 +28,5 @@ class SparkEmbedder:
             embeddings = model.encode(text_series.tolist(), show_progress_bar=False)
             return pd.Series(embeddings.tolist())
         
+        # 3. Apply the UDF to add embedding column
         return self.data.withColumn(output_col, embed_udf(self.data["text"]))
