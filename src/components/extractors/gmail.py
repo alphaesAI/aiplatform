@@ -79,12 +79,23 @@ class GmailExtractor(BaseExtractor):
         query = self.config.query
         batch_size = self.config.batch_size
 
-        result = self.service.users().messages().list(
-            userId='me', q=query, maxResults=batch_size
-        ).execute()
+        # NEW: date-based filtering
+        if self.config.start_date:
+           query += f" after:{self.config.start_date.replace('-', '/')}"
 
-        messages = result.get('messages', [])
-        return [m['id'] for m in messages]
+        if self.config.end_date:
+           query += f" before:{self.config.end_date.replace('-', '/')}"
+
+        logger.info(f"Gmail final query: {query}")
+
+        result = self.service.users().messages().list(
+            userId='me',
+            q=query,
+            maxResults=batch_size
+        ).execute()
+        
+        messages = result.get("messages", [])
+        return [m["id"] for m in messages]
 
     def _handle_attachments(self, msg_id: str, payload: Dict[str, Any]) -> List[str]:
         """
@@ -94,9 +105,17 @@ class GmailExtractor(BaseExtractor):
         file_paths = []
         parts = payload.get('parts', [])
         
+         # Decide base directory(config-driven)
+        if self.config.temp_dir:
+            base_dir = Path(self.config.temp_dir)
+        else:
+            #safe default (projec-local, not /tmp)
+            base_dir = Path.cwd() / ".tmp" / "gmail" / "attachments"
+
         # Define relative path using Pathlib
-        base_path = Path("/tmp/aiplatform/gmail/extractors") / msg_id
-        logger.info(f"PHYSICAL PATH: {base_path.absolute()}")
+        #base_path = Path("/tmp/aiplatform/gmail/extractors") / msg_id
+        base_path = base_dir / msg_id
+        logger.info(f"Gmail attachment storage path: {base_path.absolute()}")
         base_path.mkdir(parents=True, exist_ok=True)
 
         for part in parts:
