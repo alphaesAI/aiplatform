@@ -40,7 +40,7 @@ class AirflowConnectionSchema(BaseModel):
     timeout_seconds: Optional[int] = None
 
 
-       """
+"""
 1.Open Airflow UI
 
 2.Go to Admin → Connections
