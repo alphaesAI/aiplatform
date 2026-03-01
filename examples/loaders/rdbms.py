@@ -62,7 +62,7 @@ def main():
     # 5. EXECUTE THE INGESTION (Crucial Step)
     try:
         logger.info("Starting data ingestion to RDBMS")
-        # This triggers the __call__ method in your RDBMSLoader
+        # This triggers the __call__ method in the RDBMSLoader
         rows_inserted = loader(sample_data) 
         logger.info(f"Ingestion successful! {rows_inserted} rows added.")
     except Exception as e:

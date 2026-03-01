@@ -5,7 +5,7 @@ Purpose:
     Simple unit tests for TableTransformer class.
 """
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from src.spark.transformers.table import TableTransformer
 
@@ -14,6 +14,7 @@ class TestTableTransformer(unittest.TestCase):
     
     def setUp(self):
         self.mock_df = Mock()
+        self.mock_df.columns = ['id', 'name', 'description', 'extra_column']
         self.config = {
             "id_column": "id",
             "normalize_columns": ["name", "description"]

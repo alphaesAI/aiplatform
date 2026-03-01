@@ -1,3 +1,10 @@
+"""
+table.py
+====================================
+Purpose:
+    Provides universal data transformation for Spark DataFrames.
+    Handles column normalization, text concatenation, and metadata structuring.
+"""
 import logging
 
 from pyspark.sql import DataFrame
@@ -7,16 +14,53 @@ from .schemas.table import TableTransformerConfig
 logger = logging.getLogger(__name__)
 
 class TableTransformer:
+    """
+    Purpose:
+        Manages data transformation for tabular Spark DataFrames.
+        Handles column normalization and universal text field creation.
+    """
     def __init__(self, data: DataFrame, config: dict):
+        """
+        Purpose:
+            Initializes the TableTransformer with DataFrame and configuration.
+        
+        Args:
+            data (DataFrame): The Spark DataFrame containing data to transform.
+            config (dict): Configuration parameters including id_column and normalize_columns.
+        """
         self.config = TableTransformerConfig(**config)
         self.data = data
+        logger.debug("TableTransformer initialized with %d columns", len(data.columns))
 
     def __call__(self):
+        """
+        Purpose:
+            Enables the transformer to be called directly.
+        
+        Args:
+            None
+        
+        Returns:
+            DataFrame: The transformed DataFrame.
+        """
         return self.transform()
 
     def transform(self, data: DataFrame = None, config: dict = None) -> DataFrame:
+        """
+        Purpose:
+            Transforms DataFrame by normalizing columns and creating universal text field.
+        
+        Args:
+            data (DataFrame): Optional DataFrame to transform (uses self.data if None).
+            config (dict): Optional configuration (uses self.config if None).
+        
+        Returns:
+            DataFrame: Transformed DataFrame with id, text, and metadata columns.
+        """
         df = data if data is not None else self.data
         cfg = config if config is not None else self.config
+        
+        logger.info("Starting table transformation on DataFrame with %d columns", len(df.columns))
     
         # 1. Dynamic Drop (last column)
         df = df.drop(df.columns[-1])
@@ -53,8 +97,11 @@ class TableTransformer:
         logger.info(f"Available columns after transformation: {df_normalized.columns}")
         logger.info(f"Creating universal text field from all columns")
         
-        return df_normalized.select(
+        result = df_normalized.select(
             col(id_col_name).alias("id"),
             text_col.alias("text"),
             struct(*metadata_cols).alias("metadata")
         )
+        
+        logger.info("Table transformation completed successfully")
+        return result

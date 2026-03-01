@@ -1,9 +1,21 @@
+"""
+elasticsearch.py
+====================================
+Purpose:
+    Provides Pydantic schema for Elasticsearch loader configuration validation.
+    Defines required and optional fields for Elasticsearch data loading setup.
+"""
+import logging
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, Dict, Any
 
+logger = logging.getLogger(__name__)
+
 class ElasticsearchLoaderConfig(BaseModel):
     """
-    Configuration schema for loading data to Elasticsearch.
+    Purpose:
+        Validates and manages Elasticsearch loader configuration parameters.
+        Ensures proper structure for connection settings and loading options.
     """
     model_config = ConfigDict(protected_namespaces=(), extra="forbid")
     

@@ -1,9 +1,9 @@
 spark:
   app_name: "S3SparkConnector"
   packages:
-    - "org.apache.hadoop:hadoop-aws:3.3.4"
-    - "com.amazonaws:aws-java-sdk-bundle:1.12.262"
-    - "org.elasticsearch:elasticsearch-spark-30_2.12:8.15.1"
+    - "org.apache.hadoop:hadoop-aws:3.4.0"
+    - "com.amazonaws:aws-java-sdk-bundle:1.12.720" # Use the newer one here too
+    - "org.elasticsearch:elasticsearch-spark-30_2.13:8.15.1"
 
 extractor:
   path: "s3a://data-engineering-bucket-s3/tiny_commerce.csv"
@@ -23,7 +23,7 @@ embedding:
   checkpoint_path: "file:///home/logi/github/alphaesai/aiplatform/static/health_data/embedder"
 
 elasticsearch:
-  host: "localhost"
+  host: "127.0.0.1"
   port: 9200
   username: "elastic"
   password: "123456"

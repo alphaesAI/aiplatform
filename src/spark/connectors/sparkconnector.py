@@ -1,5 +1,9 @@
-""" 
-Note:es and styles package is not needed 
+"""
+sparkconnector.py
+====================================
+Purpose:
+    Provides a connector for Apache Spark sessions with S3 integration.
+    Supports dynamic package configuration and AWS credentials management.
 """
 import logging
 from pyspark.sql import SparkSession
@@ -8,13 +12,40 @@ from .schemas.sparkconnector import SparkConnectorConfig
 logger = logging.getLogger(__name__)
 
 class SparkConnector:   
+    """
+    Purpose:
+        Manages the lifecycle of a Spark session with S3 connectivity.
+        Handles AWS credentials and package configuration for Spark operations.
+    """
     _instance = None  # Singleton instance
 
     def __init__(self, config: dict):
+        """
+        Purpose:
+            Initializes the SparkConnector with Spark configuration.
+
+        Args:
+            config (dict): Spark parameters including 'host', 'login',
+            'password', 'region_name', 'app_name', and 'packages'.
+        """
         self.config = SparkConnectorConfig(**config)
         self._spark = None
+        logger.debug("SparkConnector initialized for host: %s", self.config.host)
 
     def connect(self) -> SparkSession:
+        """
+        Purpose:
+            Creates and returns a Spark session with S3 configuration.
+
+        Args:
+            None
+
+        Returns:
+            SparkSession: An active Spark session configured for S3 access.
+
+        Raises:
+            Exception: If Spark session creation fails.
+        """
         # Singleton check: Don't create a new session if one exists
         if self._spark:
             return self._spark

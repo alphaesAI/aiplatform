@@ -1,7 +1,7 @@
 import pytest
 import httpx
 from unittest.mock import patch, AsyncMock, MagicMock
-from src.custom.connectors.api import ApiConnector
+from src.components.connectors.api import ApiConnector
 
 @pytest.mark.asyncio
 class TestApiConnector:

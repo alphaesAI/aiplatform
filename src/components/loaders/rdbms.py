@@ -30,6 +30,7 @@ class RDBMSLoader(BaseLoader):
             connection (RDBMSConnector): The active database connector object.
             config (dict): Configuration containing 'table_name' and 'columns'.
         """
+        # To allow create a new connection & reuse the same connection
         self.connector = connection
         self.connection = connection() 
         self.config = RDBMSLoaderConfig(**config)
@@ -114,7 +115,7 @@ class RDBMSLoader(BaseLoader):
             logger.warning(f"No data to load for {self.table_name}.")
             return 0
 
-        buffer = io.StringIO()
+        buffer = io.StringIO()      # creates in-memory text file for fast data buffering
         writer = csv.writer(buffer, delimiter='\t', quotechar='"')
 
         try:
@@ -134,8 +135,8 @@ class RDBMSLoader(BaseLoader):
             
             buffer.seek(0)
             
-            raw_engine = self.connector._engine
-            raw_connection = raw_engine.raw_connection()
+            raw_engine = self.connector._engine     # sqlalchemy connection (ORM style) for table creation
+            raw_connection = raw_engine.raw_connection()        # raw psycopg2 connection for load
             raw_cursor = raw_connection.cursor()
             
             copy_sql = (
@@ -144,15 +145,15 @@ class RDBMSLoader(BaseLoader):
             )
             
             logger.debug(f"Executing COPY for {len(data)} rows.")
-            raw_cursor.copy_expert(sql=copy_sql, file=buffer)
+            raw_cursor.copy_expert(sql=copy_sql, file=buffer)       # postgresql's high speed bulk insert command
             
-            raw_connection.commit()
-            self.connection.commit()
+            raw_connection.commit()     # commits the COPY operation
+            self.connection.commit()    # ensures sqlalchemy connection is synced
             
             logger.info(f"Successfully loaded {len(data)} rows into {self.table_name}.")
             return len(data)
 
         except Exception as e:
-            self.connection.rollback()
+            self.connection.rollback()  # rolls back the transaction if COPY fails
             logger.error(f"RDBMS Load failed: {str(e)}")
             raise

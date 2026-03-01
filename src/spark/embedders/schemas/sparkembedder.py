@@ -1,9 +1,21 @@
+"""
+sparkembedder.py
+====================================
+Purpose:
+    Provides Pydantic schema for Spark embedder configuration validation.
+    Defines required and optional fields for text embedding model setup.
+"""
+import logging
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
+logger = logging.getLogger(__name__)
+
 class SparkEmbedderConfig(BaseModel):
     """
-    Configuration schema for Spark-based text embedding.
+    Purpose:
+        Validates and manages Spark embedder configuration parameters.
+        Ensures proper structure for model settings and performance options.
     """
     model_config = ConfigDict(protected_namespaces=(), extra="forbid")
     

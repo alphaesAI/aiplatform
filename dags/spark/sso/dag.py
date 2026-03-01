@@ -62,17 +62,18 @@ with DAG(
         py_files=ZIP_PATH,
         packages="org.apache.hadoop:hadoop-aws:3.4.0,"
              "com.amazonaws:aws-java-sdk-bundle:1.12.720,"
-             "org.elasticsearch:elasticsearch-spark-30_2.13:8.15.1",
+             "org.elasticsearch:elasticsearch-spark-30_2.12:8.17.0",
         application_args=[
             CONFIG_PATH,
             # Use the tojson filter instead of json.dumps
             "{{ ti.xcom_pull(task_ids='get_airflow_creds') | tojson }}"
         ],
+        # spark configuration parameters
         conf={
-            "spark.master": "local[*]",
-            "spark.submit.deployMode": "client",
-            "spark.driver.host": "127.0.0.1",
-            "spark.driver.bindAddress": "127.0.0.1"
+            "spark.master": "local[*]",     # Run spark locally using all available CPU cores
+            "spark.submit.deployMode": "client",    # client: local testing, cluster: distributed production
+            "spark.driver.host": "127.0.0.1",       # other workers use to connect to the driver
+            "spark.driver.bindAddress": "127.0.0.1" # the driver listens on for connections
         }
     )
     
