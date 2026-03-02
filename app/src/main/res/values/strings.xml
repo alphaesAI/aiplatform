@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Health Pipeline</string>
+    <string name="dashboard">Dashboard</string>
+    <string name="data_selection">Data</string>
+    <string name="pipeline_status">Pipeline</string>
+    <string name="analytics">Analytics</string>
+    <string name="settings">Settings</string>
+</resources>

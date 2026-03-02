@@ -44,6 +44,11 @@ local.properties
 # Android SDK
 Android/Sdk/
 
+# Project exclude paths
+/.gradle/
+/app/build/
+/build/
+
 # Logs
 *.log
 logs/
