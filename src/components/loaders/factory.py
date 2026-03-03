@@ -1,8 +1,4 @@
 import logging
-from .elasticsearch import (ElasticsearchBulkIngestor,ElasticsearchSingleIngestor)
-from .opensearch import (OpensearchBulkIngestor,OpensearchSingleIngestor)
-from .rdbms import RDBMSLoader
-from .schemas.ingestor import IngestorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -19,40 +15,34 @@ class LoaderFactory:
         Orchestrates the selection of the loading strategy.
     """
     @staticmethod
-    def get_loader(load_type: str, connection=None, config=None):
+    def get_loader(load_type: str, config: dict, connection=None, data=None):
         """
         Purpose: Returns an instance of a specific ingestor.
 
         Args:
-            load_type (str): 'elasticsearch', 'opensearch', or 'rdbms'.
-            connection: The established database/client connection.
-            config (dict): Configuration for the loader.
-            data: Optional data parameter.
+            load_type (str): 'elasticsearch' or 'opensearch'.
+            connection (Elasticsearch): The established ES client.
+            config (dict): Configuration for index settings and mappings.
 
         Returns:
-            BaseLoader: An initialized loader instance.
+            BaseLoader: An initialized BulkIngestor.
 
         Raises:
             ValueError: If the load_type is unsupported.
         """
         logger.info(f"LoaderFactory creating '{load_type}' loader.")
         load_type = load_type.lower().strip()
-        
-        if load_type == "elasticsearchsingle":
-            return ElasticsearchSingleIngestor(connection=connection, config=config)
 
-        elif load_type == "elasticsearchbulk":
+        # Lazy imports to avoid dependency issues when loader is not used
+        if load_type == "elasticsearch":
+            from .elasticsearch import ElasticsearchBulkIngestor
             return ElasticsearchBulkIngestor(connection=connection, config=config)
-
-        elif load_type == "opensearchsingle":
-            return OpensearchSingleIngestor(connection=connection, config=config)
-
-        elif load_type == "opensearchbulk":
+        elif load_type == "opensearch":
+            from .opensearch import OpensearchBulkIngestor
             return OpensearchBulkIngestor(connection=connection, config=config)
-
-        elif load_type == "rdbms":
-            return RDBMSLoader(connection=connection, config=config)
-            
+        elif load_type == "spark":
+            from .spark import ElasticsearchSparkLoader
+            return ElasticsearchSparkLoader(data=data, config=config)
         else:
             error_msg = f"Loader type '{load_type}' is not supported."
             logger.error(error_msg)

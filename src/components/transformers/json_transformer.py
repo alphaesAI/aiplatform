@@ -43,11 +43,7 @@ class JsonTransformer(BaseTransformer):
         # 2. Table Loop: The input 'self.data' is a dict where keys are table names
         # Example: table_name = "users", rows = [{row1}, {row2}]
         for table_name, rows in self.data.items():
-        
-            # 3. Dynamic Naming: Converts "users" -> "UserRecord"
-            # .capitalize() makes "users" -> "Users"
-            # .rstrip('s') makes "Users" -> "User"
-            model_name = f"{table_name.capitalize().rstrip('s')}Record"
+            model_name = self._table_to_model_name(table_name)
             
             # 4. Lookup: Searches schemas.py for a class named "UserRecord"
             model_class = getattr(self.schema_module, model_name, None)
@@ -74,3 +70,13 @@ class JsonTransformer(BaseTransformer):
                     # If a row is "dirty" (missing columns), it logs and skips to the next row.
                     logger.error(f"Validation failed for {table_name}: {e}")
                     continue
+
+    @staticmethod
+    def _table_to_model_name(table_name: str) -> str:
+        # Convert snake_case table name to CamelCase model name
+        parts = table_name.split("_")
+        if parts:
+            # Only strip trailing "s" from the last segment
+            parts[-1] = parts[-1].rstrip("s")
+        camel = "".join(p.capitalize() for p in parts if p)
+        return f"{camel}Record"

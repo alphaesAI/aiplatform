@@ -1,68 +1,56 @@
-"""
-sparkembedder.py
-====================================
-Purpose:
-    Provides distributed text embedding using Spark and sentence-transformers.
-    Leverages pandas UDFs for scalable vector generation across Spark clusters.
-"""
 import logging
+from typing import Iterator
 import pandas as pd
 from pyspark.sql import DataFrame
 from pyspark.sql.types import ArrayType, FloatType
 from pyspark.sql.functions import pandas_udf
 from sentence_transformers import SentenceTransformer
-from .schemas.sparkembedder import SparkEmbedderConfig
 
 logger = logging.getLogger(__name__)
 
 class SparkEmbedder:
-    """
-    Purpose:
-        Manages distributed text embedding using Spark DataFrames.
-        Handles sentence-transformer model loading and vector generation.
-    """
     def __init__(self, data: DataFrame, config: dict):
-        """
-        Purpose:
-            Initializes the SparkEmbedder with data and configuration.
-        
-        Args:
-            data (DataFrame): Spark DataFrame containing text column to embed.
-            config (dict): Embedding configuration including model_name and output_column.
-        """
         self.data = data
-        self.config = SparkEmbedderConfig(**config)
-        self.model_name = self.config.model_name
-        self.output_col = self.config.output_column
-        logger.debug("SparkEmbedder initialized with model: %s", self.model_name)
+        self.config = config
+        self.model_name = config.get("model_name", "all-MiniLM-L6-v2")
+        self.output_col = config.get("output_column", "row_vector")
 
     def embed(self) -> DataFrame:
-        """
-        Purpose:
-            Generates embeddings for text data using distributed Spark processing.
-        
-        Args:
-            None
-        
-        Returns:
-            DataFrame: Original DataFrame with added embedding column.
-        """
-        logger.info("Starting distributed embedding generation with model: %s", self.model_name)
-        
         # 1. Capture variables for the closure
         model_name = self.model_name
         output_col = self.output_col
         
-        # 2. Create pandas UDF for distributed embedding generation
+        # 2. Define the schema of the result
+        # mapInPandas requires us to define the schema we are returning
+        output_schema = self.data.schema.add(output_col, ArrayType(FloatType()))
+
+        # 3. The Map Function (Runs on Workers)
+        def embed_batches(iterator: Iterator[pd.DataFrame]) -> Iterator[pd.DataFrame]:
+            # --- SETUP: Runs ONCE per worker process ---
+            logger.info(f"Loading model {model_name} on worker...")
+            model = SentenceTransformer(model_name)
+            
+            for batch_df in iterator:
+                # --- EXECUTION: Runs for every batch ---
+                # Generate embeddings for the 'text' column values
+                embeddings = model.encode(
+                    batch_df["text"].tolist(), 
+                    show_progress_bar=False
+                )
+                
+                # Add the vectors as a new column in the Pandas DataFrame
+                batch_df[output_col] = embeddings.tolist()
+                
+                # Yield the updated batch back to Spark
+                yield batch_df
+
+        # 4. Trigger the distributed transformation
+        # Use withColumn to avoid schema resolution issues
         @pandas_udf(ArrayType(FloatType()))
         def embed_udf(text_series: pd.Series) -> pd.Series:
             # This runs on workers, need to load model here
-            logger.debug("Loading sentence transformer model: %s", model_name)
             model = SentenceTransformer(model_name)
             embeddings = model.encode(text_series.tolist(), show_progress_bar=False)
             return pd.Series(embeddings.tolist())
         
-        # 3. Apply the UDF to add embedding column
-        result = self.data.withColumn(output_col, embed_udf(self.data["text"]))
-        logger.info("Embedding generation completed, output column: %s", output_col)
-        return result
+        return self.data.withColumn(output_col, embed_udf(self.data["text"]))

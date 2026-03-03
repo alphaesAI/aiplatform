@@ -1,67 +1,34 @@
-"""
-table.py
-====================================
-Purpose:
-    Provides a universal extractor for various file formats from S3/Local storage.
-    Supports lazy loading and dynamic partitioning for optimal Spark performance.
-"""
 import logging
 from pyspark.sql import SparkSession, DataFrame
-from .schemas.table import TableExtractorConfig
 
 logger = logging.getLogger(__name__)
 
 class TableExtractor:
     """
-    Purpose:
-        Handles lazy loading for any file format (CSV, Parquet, JSON) 
-        from S3/Local storage using Spark.  
+    SOLID Extractor: Handles lazy loading for any file format (CSV, Parquet, JSON) 
+    from S3/Local storage using Spark.
     """
     def __init__(self, connection: SparkSession, config: dict):
         """
-        Purpose:
-            Initializes the TableExtractor with Spark session and configuration.
-        
-        Args:
-            connection (SparkSession): The active Spark session for data operations.
-            config (dict): Configuration parameters including 'path', 'format', and 'options'.
+        :param connection: The active SparkSession (from SparkConnector)
+        :param config: Dictionary containing 'path', 'format', and 'options'
         """
         self.connection = connection
-        self.config = TableExtractorConfig(**config)
-        logger.debug("TableExtractor initialized for path: %s", self.config.path)
+        self.config = config
+        logger.debug("TableExtractor initialized.")
 
     def __call__(self) -> DataFrame:
-        """
-        Purpose:
-            Enables the extractor to be called directly.
-        
-        Args:
-            None
-        
-        Returns:
-            DataFrame: The extracted DataFrame.
-        """
+        """Allows the extractor to be called directly: extractor()"""
         return self.extract()
 
     def extract(self) -> DataFrame:
         """
-        Purpose:
-            Sets partition strategy and returns a Spark DataFrame (Lazy Blueprint).
-        
-        Args:
-            None
-        
-        Returns:
-            DataFrame: A lazily evaluated Spark DataFrame from the specified source.
-        
-        Raises:
-            ValueError: If configuration 'path' is missing or format is unsupported.
+        Sets partition strategy and returns a Spark DataFrame (Lazy Blueprint).
         """
-        # 1. Get configuration from validated config
-        s3_path = self.config.path
-        format_type = self.config.format
-        batch_size_mb = self.config.batch_size_mb
-        custom_options = self.config.options or {}
+        # 1. Get configuration from YAML, set defaults if missing
+        s3_path = self.config.get("path")
+        format_type = self.config.get("format", "csv") # Supports 'csv', 'parquet', 'json'
+        batch_size_mb = self.config.get("batch_size_mb", 20)
         
         if not s3_path:
             raise ValueError("Configuration 'path' is required for extraction.")
@@ -86,6 +53,7 @@ class TableExtractor:
         # 4. Dynamic Reader: Apply format-specific options (header, delimiter, etc.)
         # This replaces hardcoded .option("header", "true")
         reader = self.connection.read
+        custom_options = self.config.get("options", {})
         
         for key, value in custom_options.items():
             reader = reader.option(key, str(value))

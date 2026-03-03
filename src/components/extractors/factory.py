@@ -1,10 +1,5 @@
 import logging
 from typing import Any, Dict
-from .rdbms import RDBMSExtractor
-from .gmail import GmailExtractor
-from .arxiv import ArxivExtractor
-from .elasticsearch import ElasticsearchExtractor
-from .opensearch import OpensearchExtractor
 logger = logging.getLogger(__name__)
 
 """
@@ -41,16 +36,20 @@ class ExtractorFactory:
         logger.info(f"ExtractorFactory generating '{extractor_type}' extractor.")
         extractor_type = extractor_type.lower().strip()
 
+        # Lazy imports to avoid dependency issues when extractor is not used
+        from .rdbms import RDBMSExtractor
+        
         if extractor_type == "rdbms":
             return RDBMSExtractor(connection=connection, config=config)
         elif extractor_type == "gmail":
+            from .gmail import GmailExtractor
             return GmailExtractor(connection=connection, config=config)
         elif extractor_type == "arxiv":
+            from .arxiv import ArxivExtractor
             return ArxivExtractor(connection=connection, config=config)
-        elif extractor_type == "elasticsearch":
-            return ElasticsearchExtractor(connection=connection, config=config)
-        elif extractor_type == "opensearch":
-            return OpensearchExtractor(connection=connection, config=config)
+        elif extractor_type == "spark":
+            from .spark import CSVExtractor
+            return CSVExtractor(connection=connection, config=config)
         else:
             error_msg = f"Unknown extractor type: {extractor_type}"
             logger.error(error_msg)

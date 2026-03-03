@@ -19,6 +19,13 @@ from datetime import datetime
 from airflow.providers.standard.operators.python import PythonOperator
 from typing import Any, Dict, List
 
+# Ensure project root is on sys.path so the `src` package is importable
+import os
+import sys
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 # Factory & Utility Imports
 from src.components.credentials.factory import CredentialFactory
 from src.components.connectors.factory import ConnectorFactory

@@ -1,5 +1,8 @@
 import logging
 from airflow.hooks.base import BaseHook
+from airflow.exceptions import AirflowNotFoundException
+from airflow.models.connection import Connection
+from airflow.utils.session import create_session
 from .base import CredentialProvider
 from .schemas import AirflowConnectionSchema
 
@@ -44,8 +47,17 @@ class AirflowCredentials(CredentialProvider):
         logger.info(f"Fetching credentials from Airflow for conn_id: {self.conn_id}")
         
         try:
-            # 1. Fetch the connection object from Airflow Metadata
+            # 1. Fetch the connection object from Airflow runtime context
+            # In some Airflow 3 execution contexts this can fail to resolve,
+            # so we fall back to direct metadata DB lookup below.
             conn = BaseHook.get_connection(self.conn_id)
+        except AirflowNotFoundException:
+            logger.warning(
+                "BaseHook could not resolve conn_id '%s'. Falling back to metadata DB lookup.",
+                self.conn_id
+            )
+            conn = self._get_connection_from_metadata()
+        try:
 
             # 2. Build the core dictionary
             # host, port, login, password, and schema are standard Airflow fields
@@ -65,6 +77,15 @@ class AirflowCredentials(CredentialProvider):
             # Converts a validated Pydantic object back into a standard Python dictionary.
             return validated_conn.model_dump(exclude_none=True)
 
-        except Exception as e:
+        except Exception:
             logger.exception(f"Failed to retrieve Airflow connection: {self.conn_id}")
             raise
+
+    def _get_connection_from_metadata(self):
+        """Read connection directly from Airflow metadata DB."""
+        with create_session() as session:
+            conn = session.query(Connection).filter(Connection.conn_id == self.conn_id).one_or_none()
+
+        if conn is None:
+            raise AirflowNotFoundException(f"The conn_id `{self.conn_id}` isn't defined")
+        return conn

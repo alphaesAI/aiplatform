@@ -4,7 +4,7 @@ import logging
 from sqlalchemy import text
 from typing import Dict, Any, List
 from .base import BaseExtractor
-from .schemas.rdbms import RDBMSExtractorConfig
+from .schemas import RDBMSExtractorConfig
 
 logger = logging.getLogger(__name__)
 
@@ -17,70 +17,68 @@ Purpose:
 
 class RDBMSExtractor(BaseExtractor):
     """
-    Extracts data from RDBMS using SQLAlchemy with full/incremental modes.
-    
-    Attributes:
-        connection: SQLAlchemy database connection object
-        config: RDBMSExtractorConfig with table extraction settings
+    Purpose: 
+        Performs bulk extraction from one or more database tables based 
+        on a provided schema and column configuration.
     """
-    
+
     def __init__(self, connection: Any, config: Dict[str, Any]):
         """
-        Initialize RDBMS extractor with connection and config.
-        
+        Purpose: Initializes the extractor with a database connection.
+
         Args:
-            connection: SQLAlchemy database connection
-            config: Configuration dict with table settings
-        
-        Raises:
-            ValidationError: If config doesn't match RDBMSExtractorConfig schema
+            connection (Any): SQLAlchemy connection object.
+            config (Dict[str, Any]): Config containing a list of 'tables'.
         """
         self.connection = connection
         self.config = RDBMSExtractorConfig(**config)
 
-    def extract(self):
+    def __call__(self) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Extract data from configured tables using memory-efficient generator.
-        
-        Yields:
-            tuple: (table_name, row_dict) - table name and row data
-        
-        Raises:
-            Exception: If SQL execution fails
-        
-        Note:
-            Full mode: extracts all rows. Incremental: extracts rows where cursor_column > last_extracted_value
+        Purpose: Executes the extract method.
+
+        Returns:
+            Dict[str, List[Dict[str, Any]]]: Results keyed by table name.
         """
-        for table in self.config.tables:
-            # Extract table configuration details
+        return self.extract()
+
+    def extract(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Purpose: Loops through tables in config and executes SELECT queries.
+
+        Returns:
+            Dict[str, List[Dict[str, Any]]]: A map of table names to rows.
+        """
+        results = {}
+        tables = self.config.tables
+
+        for table in tables:
             name = table.table_name
             schema = table.schema
-            cols = ", ".join(table.columns) if table.columns else "*"
-            
-            # Extract incremental configuration (e.g., 'incremental' vs 'full')
-            mode = table.extraction_mode or 'full'
-            cursor_col = table.cursor_column  # e.g., 'updated_at'
-            last_val = table.last_extracted_value  # The "Bookmark"
+            cols = table.columns
 
-            # Build SQL query with optional incremental filtering
-            query_str = f"SELECT {cols} FROM {schema}.{name}"
+            column_query = "*" if not cols else ", ".join(cols)
+            query = f"SELECT {column_query} FROM {schema}.{name}"
             params = {}
 
-            # Add WHERE clause for incremental extraction if configured
-            if mode == "incremental" and cursor_col and last_val is not None:
-                query_str += f" WHERE {cursor_col} > :last_val ORDER BY {cursor_col} ASC"
-                params["last_val"] = last_val
-
-            logger.info(f"Running {mode} extraction for table {schema}.{name}")
+            if table.extraction_mode == "incremental" and table.incremental_column:
+                if table.last_value:
+                    query += f" WHERE {table.incremental_column} > :last_value"
+                    params["last_value"] = table.last_value
+                query += f" ORDER BY {table.incremental_column} ASC"
+            
+            logger.info(f"Extracting data from {schema}.{name}")
 
             try:
-                # Execute the query with parameters to prevent SQL injection
-                result_proxy = self.connection.execute(text(query_str), params)
-                
-                # Yield rows one by one as dictionaries to minimize memory usage
-                for row in result_proxy.mappings():
-                    yield name, dict(row)
+                result_proxy = self.connection.execute(text(query), params)
+                # mappings() allows dict-like access to row columns
+                rows = [dict(row) for row in result_proxy.mappings()]
+                results[name] = rows
+                logger.debug(f"Successfully extracted {len(rows)} rows from {name}")
             
             except Exception as e:
-                logger.exception(f"Failed to extract data from table {schema}.{name}")
+                logger.exception(f"Error extracting {schema}.{name}")
                 raise e
+        
+        return results
+        

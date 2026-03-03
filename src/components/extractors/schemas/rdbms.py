@@ -1,16 +1,17 @@
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional, Any
+from typing import List, Optional
 
 class RDBMSTableConfig(BaseModel):
-    """Schema for a single table entry in RDBMS extraction configuration."""
+    """Schema for a single table entry in RDBMS"""
 
     model_config = ConfigDict(protected_namespaces=())
-    table_name: str
+    table_name : str
     schema: str
-    columns: Optional[List[str]] = None
-    extraction_mode: Optional[str] = "full"  # "full" or "incremental"
-    cursor_column: Optional[str] = None  # Column for incremental extraction (e.g., "updated_at")
-    last_extracted_value: Optional[Any] = None  # Last value for incremental extraction bookmark
+    columns: Optional[List[str]]
+    extraction_mode: Optional[str] = None
+    incremental_column: Optional[str] = None
+    batch_size: Optional[int] = None
+    last_value: Optional[str] = None
 
 class RDBMSExtractorConfig(BaseModel):
     
@@ -23,18 +24,12 @@ class RDBMSExtractorConfig(BaseModel):
             {
                 "table_name": "users",
                 "schema": "public",
-                "columns": ["id", "name"],  # List of strings (optional)
-                "extraction_mode": "full",  # "full" or "incremental" (optional, defaults to "full")
-                "cursor_column": None,  # Column for incremental extraction (optional)
-                "last_extracted_value": None  # Last value for incremental extraction (optional)
+                "columns": ["id", "name"]  # List of strings
             },
             {
                 "table_name": "orders",
                 "schema": "sales",
-                "columns": ["order_id", "total", "status"],
-                "extraction_mode": "incremental",
-                "cursor_column": "updated_at",
-                "last_extracted_value": "2024-01-01 00:00:00"
+                "columns": ["order_id", "total", "status"]
             }
         ]
     } 

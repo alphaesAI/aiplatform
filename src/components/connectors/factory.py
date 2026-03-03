@@ -1,14 +1,6 @@
 import logging
 from typing import Any
 
-from .rdbms import RDBMSConnector
-from .gmail import GmailConnector
-from .arxiv import ArxivConnector
-from .elasticsearch import ElasticsearchConnector
-from .opensearch import OpensearchConnector
-from .jina import JinaConnector
-from .s3 import S3Connector
-
 logger = logging.getLogger(__name__)
 
 """
@@ -46,19 +38,28 @@ class ConnectorFactory:
         
         connector_type = connector_type.lower()
         
+        # Lazy imports to avoid dependency issues when connector is not used
+        from .rdbms import RDBMSConnector
+        
         if connector_type == "rdbms":
             return RDBMSConnector(config=config)
         elif connector_type == "gmail":
+            from .gmail import GmailConnector
             return GmailConnector(config=config)
         elif connector_type == "arxiv":
+            from .arxiv import ArxivConnector
             return ArxivConnector(config=config)
         elif connector_type == "elasticsearch":
+            from .elasticsearch import ElasticsearchConnector
             return ElasticsearchConnector(config=config)
         elif connector_type == "opensearch":
+            from .opensearch import OpensearchConnector
             return OpensearchConnector(config=config)
         elif connector_type == "jina":
+            from .jina import JinaConnector
             return JinaConnector(config=config)
         elif connector_type == "s3":
+            from .s3 import S3Connector
             return S3Connector(config=config)
         else:
             error_msg = f"Unsupported connector type: {connector_type}"

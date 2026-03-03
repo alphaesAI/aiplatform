@@ -29,3 +29,20 @@ class ProductRecord(BaseModel):
     stock: int
     created_at: datetime
     updated_at: datetime
+
+class HealthAppSessionRecord(BaseModel):
+    model_config = STRICT_CONFIG
+    pseudo_id: str
+    date: datetime
+    duration_minutes: float
+    activity_name: str
+    start_time: datetime
+    end_time: datetime
+    avg_hr_bpm: int
+    max_hr_bpm: int
+    elevation_gain_m: float
+    distance_meters: float
+    calories_kcal: float
+    steps: int
+    active_zone_minutes: int
+    speed_mps: float

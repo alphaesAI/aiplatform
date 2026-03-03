@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 
 class OpensearchConfig(BaseModel):
@@ -8,8 +8,10 @@ class OpensearchConfig(BaseModel):
     """
     model_config = ConfigDict(protected_namespaces=())
 
-    schema: str
+    schema_type: str = Field(alias="schema")
     host: str
     port: int
     verify_certs: bool = True
     ca_certs: Optional[str] = None
+    login: Optional[str] = None
+    password: Optional[str] = None

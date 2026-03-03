@@ -1,10 +1,3 @@
-"""
-elasticsearch.py
-====================================
-Purpose:
-    Provides Elasticsearch data loading using Spark with SSL support.
-    Handles index creation, authentication, and bulk data operations.
-"""
 import logging
 import requests
 import os
@@ -14,20 +7,7 @@ from pyspark.sql.functions import size, col
 logger = logging.getLogger(__name__)
 
 class ElasticsearchSparkLoader:
-    """
-    Purpose:
-        Manages Elasticsearch data loading with Spark DataFrame integration.
-        Handles SSL certificates, authentication, and index management.
-    """
     def __init__(self, spark, config: dict):
-        """
-        Purpose:
-            Initializes the ElasticsearchSparkLoader with Spark session and config.
-        
-        Args:
-            spark: The active Spark session for data operations.
-            config (dict): Configuration parameters including index_name, host, port, and SSL settings.
-        """
         self.spark = spark
         self.config = config
         self.index_name = config['index_name']
@@ -47,20 +27,9 @@ class ElasticsearchSparkLoader:
         self.username = config.get("username")
         self.password = config.get("password")
         self.auth = (self.username, self.password) if self.username else None
-        
-        logger.debug("ElasticsearchSparkLoader initialized for index: %s", self.index_name)
 
     def _prepare_index(self):
-        """
-        Purpose:
-            Prepares Elasticsearch index using Python Requests with PEM Certificate.
-        
-        Args:
-            None
-        
-        Returns:
-            None
-        """
+        """Driver-side check using Python Requests + PEM Certificate."""
         index_url = f"{self.protocol}://{self.host}:{self.port}/{self.index_name}"
         verify_ssl = self.pem_path if self.use_ssl else False
         
@@ -87,23 +56,11 @@ class ElasticsearchSparkLoader:
             raise
 
     def load(self, df: DataFrame):
-        """
-        Purpose:
-            Loads DataFrame into Elasticsearch using Spark with JKS Truststore.
-        
-        Args:
-            df (DataFrame): The Spark DataFrame containing data to load.
-        
-        Returns:
-            None
-        """
-        logger.info("Starting Elasticsearch load operation for index: %s", self.index_name)
+        """Executor-side load using Spark + JKS Truststore."""
         self._prepare_index()
 
         vector_col = self.config.get("vector_column", "row_vector")
         df_clean = df.filter(size(col(vector_col)) > 0)
-        
-        logger.debug("Filtered DataFrame to %d rows with non-empty vectors", df_clean.count())
 
         es_options = {
             "es.nodes": self.host,
@@ -144,18 +101,6 @@ class ElasticsearchSparkLoader:
             .options(**es_options)
             .mode(self.config.get("write_mode", "append"))
             .save())
-        
-        logger.info("Elasticsearch load operation completed successfully")
 
     def __call__(self, df: DataFrame):
-        """
-        Purpose:
-            Enables the loader to be called directly.
-        
-        Args:
-            df (DataFrame): The Spark DataFrame containing data to load.
-        
-        Returns:
-            None
-        """
         self.load(df)

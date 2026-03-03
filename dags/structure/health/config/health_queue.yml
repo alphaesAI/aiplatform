@@ -1,0 +1,60 @@
+# Health Queue Pipeline Configuration
+
+postgres:
+  extraction:
+    source_name: "health_queue_db"
+    tables:
+      - table_name: "health_data_queue"
+        schema: "public"
+        columns:
+          - "id"
+          - "queue_id"
+          - "pseudo_id"
+          - "date"
+          - "duration_minutes"
+          - "activity_name"
+          - "start_time"
+          - "end_time"
+          - "avg_hr_bpm"
+          - "max_hr_bpm"
+          - "elevation_gain_m"
+          - "distance_meters"
+          - "calories_kcal"
+          - "steps"
+          - "active_zone_minutes"
+          - "speed_mps"
+          - "status"
+          - "retry_count"
+          - "error_message"
+          - "created_at"
+          - "updated_at"
+        extraction_mode: "batch"
+        where_clause: "status = 'pending'"
+        batch_size: 1000
+
+elasticsearch:
+  load:
+    index_name: "health_queue_sessions"
+    ingest_mode: bulk
+    settings:
+      index:
+        number_of_shards: 1
+        number_of_replicas: 0
+    mappings:
+      dynamic: true
+      properties:
+        queue_id: {type: keyword}
+        pseudo_id: {type: keyword}
+        date: {type: date}
+        duration_minutes: {type: float}
+        activity_name: {type: keyword}
+        start_time: {type: date}
+        end_time: {type: date}
+        avg_hr_bpm: {type: integer}
+        max_hr_bpm: {type: integer}
+        elevation_gain_m: {type: float}
+        distance_meters: {type: float}
+        calories_kcal: {type: float}
+        steps: {type: integer}
+        active_zone_minutes: {type: integer}
+        speed_mps: {type: float}

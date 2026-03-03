@@ -1,2 +1,1 @@
 from .airflow import AirflowConnectionSchema
-from .generic import GenericConnectionSchema

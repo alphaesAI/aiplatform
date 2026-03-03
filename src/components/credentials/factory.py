@@ -1,7 +1,4 @@
 import logging
-from .airflow import AirflowCredentials
-from .local.credentials import LocalCredentialProvider 
-
 logger = logging.getLogger(__name__)
 
 """
@@ -38,11 +35,17 @@ class CredentialFactory:
         mode = mode.lower().strip()
         logger.info(f"CredentialFactory selecting provider for mode: {mode}")
 
+        # Lazy imports to avoid dependency issues
         if mode == "airflow":
+            from .airflow import AirflowCredentials
             return AirflowCredentials(conn_id)
         
         elif mode == "local":
-            return LocalCredentialProvider(conn_id)
+            # Note: Ensure LocalCredentials is imported/defined
+            # from .local import LocalCredentials
+            # return LocalCredentials(conn_id)
+            logger.warning("Local mode requested but LocalCredentials implementation was not provided in snippet.")
+            raise NotImplementedError("LocalCredentials not yet implemented.")
         
         else:
             error_msg = f"Unknown mode: {mode}. Use 'airflow' or 'local'."

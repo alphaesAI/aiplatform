@@ -1,9 +1,6 @@
 import logging
 from typing import Any
 
-from .txtai import TxtaiEmbeddings
-from .jina import JinaEmbeddingsService
-
 logger = logging.getLogger(__name__)
 
 """
@@ -42,10 +39,16 @@ class EmbedderFactory:
         
         embedder_type = embedder_type.lower()
         
+        # Lazy imports to avoid dependency issues when embedder is not used
         if embedder_type == "txtai":
+            from .txtai import TxtaiEmbeddings
             return TxtaiEmbeddings(data=data, config=config)
         elif embedder_type == "jina":
+            from .jina import JinaEmbeddingsService
             return JinaEmbeddingsService(data=data, config=config)
+        elif embedder_type == "spark":
+            from .spark import SparkEmbedder
+            return SparkEmbedder(data=data, config=config)
         else:
             error_msg = f"Unsupported embedder type: {embedder_type}"
             logger.error(error_msg)

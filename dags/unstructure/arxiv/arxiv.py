@@ -17,6 +17,13 @@ from typing import Any, Dict, List
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
 
+# Ensure project root is on sys.path so the `src` package is importable
+import os
+import sys
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 # Factory & Utility Imports
 from src.components.credentials.factory import CredentialFactory
 from src.components.connectors.factory import ConnectorFactory
@@ -131,12 +138,7 @@ def embedder_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
     """
     chunks = ti.xcom_pull(task_ids='chunk_structured_content')
     # Using 'embeddings' key from YAML
-    full_config = load_yml(CONFIG_PATH)
-    config = full_config.get('embeddings', {})
-    
-    logger.info(f"Full YAML config keys: {list(full_config.keys())}")
-    logger.info(f"Embeddings config: {config}")
-    logger.info(f"Embeddings config type: {type(config)}")
+    config = load_yml(CONFIG_PATH).get('embeddings', {})
     
     # Standardized Factory call matching the Gmail pattern
     embedder = EmbedderFactory.get_embedder(embedder_type="txtai", data=chunks, config=config)

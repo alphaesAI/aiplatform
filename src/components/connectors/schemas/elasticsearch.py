@@ -13,7 +13,8 @@ class ElasticsearchConfig(BaseModel):
     port: int
     verify_certs: bool = True
     ca_certs: Optional[str] = None #Certificate Authority (Public CA)
-
+    login: Optional[str] = None
+    password: Optional[str] = None
     #verify_certs=True
     #ca_certs="/etc/ssl/certs/internal-ca.pem" , Internal/Self-signedCA (most enterprises)
     

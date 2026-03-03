@@ -133,10 +133,14 @@ class ElasticsearchConnector:
             self._client = Elasticsearch(**client_kwargs)
 
             # Verify connection
-            if not self._client.ping():
-                error_msg = f"Could not connect to Elasticsearch at {es_host}. Ping failed."
-                logger.error(error_msg)
-                raise ConnectionError(error_msg)
+            
+            try:
+               info = self._client.info()
+               logger.info(f"Connected to Elasticsearch cluster: {info.get('cluster_name', 'unknown')}")
+            except Exception as e:
+               error_msg = f"Could not connect to Elasticsearch at {es_host}. Error: {e}"
+               logger.error(error_msg)
+               raise ConnectionError(error_msg)
 
             logger.info("Successfully connected to Elasticsearch.")
 
