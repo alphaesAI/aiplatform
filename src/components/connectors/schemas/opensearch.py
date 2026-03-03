@@ -13,3 +13,5 @@ class OpensearchConfig(BaseModel):
     port: int
     verify_certs: bool = True
     ca_certs: Optional[str] = None
+    login: Optional[str] = None
+    password: Optional[str] = None
