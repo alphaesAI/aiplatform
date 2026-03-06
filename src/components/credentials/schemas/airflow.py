@@ -28,6 +28,10 @@ class AirflowConnectionSchema(BaseModel):
 
     region_name: Optional[str] = None
     
+    # Database connection fields
+    application_name: Optional[str] = None
+    connect_timeout: Optional[int] = None
+    
     # Arxiv-specific fields
     base_url: Optional[str] = None
     timeout: Optional[int] = None

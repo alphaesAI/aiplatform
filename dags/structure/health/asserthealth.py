@@ -14,6 +14,7 @@ from src.components.credentials.factory import CredentialFactory
 from src.components.connectors.factory import ConnectorFactory
 from src.components.extractors.factory import ExtractorFactory
 from src.components.transformers.factory import TransformerFactory
+from src.components.loaders.factory import LoaderFactory
 from src.components.utils.reader import load_yml
 
 logger = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ def loading_task(ti: Any, **kwargs: Any) -> None:
 # --- DAG Definition ---
 
 with DAG(
-    'health_data_pipeline_assert',
+    'assert_health_pipeline',
     default_args={'owner': 'alpha_team', 'retries': 0},
     start_date=datetime(2026, 1, 1),
     schedule="@monthly",

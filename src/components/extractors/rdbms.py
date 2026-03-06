@@ -38,6 +38,9 @@ class RDBMSExtractor(BaseExtractor):
         self.connection = connection
         self.config = RDBMSExtractorConfig(**config)
 
+    def __call__(self):
+        return self.extract()
+
     def extract(self):
         """
         Extract data from configured tables using memory-efficient generator.
