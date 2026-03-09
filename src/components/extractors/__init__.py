@@ -5,7 +5,7 @@ Purpose:
     Handles logic for pulling and normalizing data from various sources.
 """
 
-from .factory import ExtractorFactory
+#from .factory import ExtractorFactory
 from .base import BaseExtractor
 from .rdbms import RDBMSExtractor
 from .gmail import GmailExtractor

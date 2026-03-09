@@ -51,6 +51,9 @@ class TransformerFactory:
         
         elif transformer_type == "pdf":
             return PDFTransformer(data, config)
+
+        elif transformer_type == "googledrive":
+            return GoogleDriveDocumentTransformer(connection=connection)
         
         else:
             error_msg = f"Unknown transformer type: {transformer_type}"

@@ -51,6 +51,8 @@ class ExtractorFactory:
             return ElasticsearchExtractor(connection=connection, config=config)
         elif extractor_type == "opensearch":
             return OpensearchExtractor(connection=connection, config=config)
+        elif extractor_type == "googledrive":
+            return GoogleDriveExtractor(connection=connection, config=config)
         else:
             error_msg = f"Unknown extractor type: {extractor_type}"
             logger.error(error_msg)

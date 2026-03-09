@@ -16,7 +16,7 @@ class BaseEmbedder(ABC):
         Abstract base class that enforces across all 
         embedding strategies.
     """
-
+    @abstractmethod
     def embed(self, text: str):
    
         raise NotImplementedError("Child classes must implement the load method!")

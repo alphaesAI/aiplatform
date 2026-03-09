@@ -8,7 +8,7 @@ from .elasticsearch import ElasticsearchConnector
 from .opensearch import OpensearchConnector
 from .jina import JinaConnector
 from .s3 import S3Connector
-
+from .googledrive import GoogleDriveConnector
 logger = logging.getLogger(__name__)
 
 """
@@ -60,6 +60,8 @@ class ConnectorFactory:
             return JinaConnector(config=config)
         elif connector_type == "s3":
             return S3Connector(config=config)
+        elif connector_type == "googledrive":
+            return GoogleDriveConnector(config=config)
         else:
             error_msg = f"Unsupported connector type: {connector_type}"
             logger.error(error_msg)

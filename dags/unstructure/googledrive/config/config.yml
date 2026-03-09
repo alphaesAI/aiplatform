@@ -1,0 +1,69 @@
+googledrive_pipeline:
+
+  extraction:
+    folder_id: "root"
+    batch_size: 10
+    fields:
+      - "name"
+      - "mimeType"
+      - "modifiedTime"
+      - "owners"
+
+    extraction_mode: "incremental"
+
+    incremental:
+      enabled: true
+      timestamp_field: "modifiedTime"
+      
+  transformation:
+    index_name: "googledrive_index"
+    textractor:
+      paragraphs: true
+      sections: true
+    segmentation:
+      sentences: true
+      minlength: 20
+      maxlength: 512
+
+  embeddings:
+    path: "sentence-transformers/all-MiniLM-L6-v2"
+    content: true
+    backend: "annoy"
+
+  load:
+    index_name: "googledrive_index"
+    settings:
+      index:
+        number_of_shards: 1
+        number_of_replicas: 0
+      analysis:
+        analyzer:
+          drive_analyzer:
+            type: custom
+            tokenizer: standard
+            filter: ["lowercase", "stop", "snowball"]
+
+    mappings:
+      dynamic: true
+      properties:
+        id:
+          type: keyword          # Google Drive file ID
+
+        source_id:
+          type: keyword          # Google Drive account or workspace
+
+        source:
+          type: keyword          # Constant value "googledrive"
+
+        text:
+          type: text
+          analyzer: drive_analyzer
+
+        embedding:
+          type: dense_vector
+          dims: 384              # MiniLM-L6-v2 embedding size
+          index: true
+          similarity: cosine
+
+        metadata:
+          type: object           # Holds name, mimeType, modifiedTime, etc.
