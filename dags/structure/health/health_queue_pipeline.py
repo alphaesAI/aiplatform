@@ -1,25 +1,20 @@
 """
 Module: Health Queue Pipeline DAG
-Purpose: Process health data from queue (health_data_queue table)
-         Transform and load into Elasticsearch
+Purpose: Process queue data from health_data_queue table
+         and load into Elasticsearch.
 """
 
 import warnings
 import logging
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", module="skops")
 logging.getLogger("skops").setLevel(logging.ERROR)
 
 from datetime import datetime
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 from typing import Any, Dict, List
-
-import os
-import sys
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
 
 from src.components.credentials.factory import CredentialFactory
 from src.components.connectors.factory import ConnectorFactory
@@ -30,12 +25,14 @@ from src.components.utils.reader import load_yml
 
 logger = logging.getLogger(__name__)
 
-CONFIG_PATH = "/home/surya/aiplatform-general/dags/structure/health/config/health_queue.yml"
+CONFIG_PATH = "dags/structure/health/config/health_queue.yml"
 
+
+# ---------- Task Functions ----------
 
 def psqlcredential_task(**kwargs: Any) -> Dict[str, Any]:
-    """Fetch Postgres credentials for queue database."""
-    logger.info("Fetching Postgres credentials for health queue.")
+    """Fetch Postgres credentials."""
+    logger.info("Fetching Postgres credentials for queue.")
     return CredentialFactory.get_provider(
         mode="airflow",
         conn_id="health_queue_db"
@@ -52,12 +49,17 @@ def escredential_task(**kwargs: Any) -> Dict[str, Any]:
 
 
 def extraction_task(ti: Any, **kwargs: Any) -> Dict[str, Any]:
-    """Extract pending records from health_data_queue."""
+    """Extract pending rows from health_data_queue."""
     creds = ti.xcom_pull(task_ids="get_psql_creds")
-    creds["type"] = "postgresql+psycopg2"  
+    creds["type"] = "postgresql+psycopg2"
+
     config = load_yml(CONFIG_PATH).get("postgres", {}).get("extraction", {})
 
-    connector = ConnectorFactory.get_connector(connector_type="rdbms", config=creds)
+    connector = ConnectorFactory.get_connector(
+        connector_type="rdbms",
+        config=creds
+    )
+
     connection = connector()
 
     try:
@@ -66,44 +68,30 @@ def extraction_task(ti: Any, **kwargs: Any) -> Dict[str, Any]:
             connection=connection,
             config=config
         )
+
         data = extractor()
-        
-        #Convert UUID to string for serialization
-        for table_name, rows in data.items():
+
+        # convert UUID → string for XCom serialization
+        for table, rows in data.items():
             for row in rows:
-                if 'queue_id' in row and row['queue_id']:
-                    row['queue_id'] = str(row['queue_id'])
+                if row.get("queue_id"):
+                    row["queue_id"] = str(row["queue_id"])
+
         return data
+
     finally:
         connection.close()
 
 
 def transformation_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
-    """Transform extracted records into bulk ES actions."""
+    """Transform queue rows into Elasticsearch bulk actions."""
     raw_data = ti.xcom_pull(task_ids="extract_queue_data")
+
     config = load_yml(CONFIG_PATH).get("elasticsearch", {}).get("load", {})
-
-    clean_data = {}
-    for table_name, rows in (raw_data or {}).items():
-        valid_rows = []
-        for row in rows:
-            # Remove queue-specific fields
-            row.pop("status", None)
-            row.pop("retry_count", None)
-            row.pop("error_message", None)
-            row.pop("created_at", None)
-            row.pop("updated_at", None)
-
-            if _is_valid_session_row(row):
-                valid_rows.append(row)
-            else:
-                logger.warning("Dropping invalid row: %s", row)
-
-        clean_data[table_name] = valid_rows
 
     transformer = TransformerFactory.get_transformer(
         transformer_type="json",
-        data=clean_data,
+        data=raw_data,
         config=config
     )
 
@@ -111,23 +99,25 @@ def transformation_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
 
 
 def loading_task(ti: Any, **kwargs: Any) -> None:
-    """Load transformed records to Elasticsearch."""
+    """Load transformed data to Elasticsearch."""
     transformed_data = ti.xcom_pull(task_ids="transform_queue_data")
     es_creds = ti.xcom_pull(task_ids="get_es_creds")
-     # Fix port mapping from Airflow connection
-    if 'schema' in es_creds and not es_creds.get('port'):
-        es_creds['port'] = int(es_creds.pop('schema'))
-    
-    # Set schema to http if not set
-    if not es_creds.get('schema'):
-        es_creds['schema'] = 'http'
-        
-    # Disable SSL verification for localhost
-    es_creds['verify_certs'] = False
-    #es_creds['use_ssl'] = False
+
+    if "schema" in es_creds and not es_creds.get("port"):
+        es_creds["port"] = int(es_creds.pop("schema"))
+
+    if not es_creds.get("schema"):
+        es_creds["schema"] = "http"
+
+    es_creds["verify_certs"] = False
+
     config = load_yml(CONFIG_PATH).get("elasticsearch", {}).get("load", {})
 
-    connector = ConnectorFactory.get_connector(connector_type="elasticsearch", config=es_creds)
+    connector = ConnectorFactory.get_connector(
+        connector_type="elasticsearch",
+        config=es_creds
+    )
+
     es_connection = connector()
 
     loader = LoaderFactory.get_loader(
@@ -137,54 +127,52 @@ def loading_task(ti: Any, **kwargs: Any) -> None:
     )
 
     loader(data=transformed_data)
-    logger.info("Queue data loaded to Elasticsearch successfully.")
+
+    logger.info("Queue data loaded successfully.")
 
 
 def update_status_task(ti: Any, **kwargs: Any) -> None:
-    """Update processed records status to 'completed'."""
+    """Update processed queue rows to completed."""
     raw_data = ti.xcom_pull(task_ids="extract_queue_data") or {}
     rows = raw_data.get("health_data_queue", [])
 
     if not rows:
-        logger.info("No rows to update.")
+        logger.info("No queue records to update.")
         return
 
     creds = ti.xcom_pull(task_ids="get_psql_creds")
-    creds["type"] = "postgresql+psycopg2"  # Add type field
-    connector = ConnectorFactory.get_connector(connector_type="rdbms", config=creds)
+    creds["type"] = "postgresql+psycopg2"
+
+    connector = ConnectorFactory.get_connector(
+        connector_type="rdbms",
+        config=creds
+    )
+
     connection = connector()
 
     try:
         from sqlalchemy import text
-        queue_ids = [row.get("queue_id") for row in rows if row.get("queue_id")]
+
+        queue_ids = [row["queue_id"] for row in rows if row.get("queue_id")]
 
         if queue_ids:
-            placeholders = ','.join([f"'{qid}'" for qid in queue_ids])
+            ids = ",".join([f"'{qid}'" for qid in queue_ids])
+
             update_sql = text(f"""
                 UPDATE health_data_queue
-                SET status = 'completed', updated_at = NOW()
-                WHERE queue_id IN ({placeholders})
+                SET status='completed', updated_at=NOW()
+                WHERE queue_id IN ({ids})
             """)
+
             connection.execute(update_sql)
-            #connection.commit()
-            logger.info(f"Updated {len(queue_ids)} records to completed status.")
+
+            logger.info("Updated %s records.", len(queue_ids))
+
     finally:
         connection.close()
 
 
-def _is_valid_session_row(row: Dict[str, Any]) -> bool:
-    """Validate session row data."""
-    try:
-        if row.get("duration_minutes", 0) < 0:
-            return False
-        if row.get("avg_hr_bpm", 0) < 0 or row.get("max_hr_bpm", 0) < 0:
-            return False
-        if row.get("avg_hr_bpm", 0) > row.get("max_hr_bpm", 0) and row.get("max_hr_bpm", 0) > 0:
-            return False
-        return True
-    except Exception:
-        return False
-
+# ---------- DAG Definition ----------
 
 default_args = {
     "owner": "health_team",
@@ -231,6 +219,7 @@ with DAG(
         python_callable=update_status_task
     )
 
-    # Task dependencies
+    # Dependencies
     get_psql_creds >> extract_queue_data >> transform_queue_data >> load_to_es >> update_status
-    get_es_creds >> load_to_es
+    get_es_creds
+    [transform_queue_data, get_es_creds] >> load_to_es
