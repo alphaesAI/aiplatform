@@ -39,27 +39,27 @@ chunker:
     overlap_size: 120
     min_chunk_size: 150
 
-elasticsearch:
-  # General Load Settings
-  load:
-    index_name: "arxiv_chunks" 
-    settings:
-      index:
-        number_of_shards: 1
-        number_of_replicas: 0
-      analysis:
-        analyzer:
-          arxiv_analyzer:
-            type: custom
-            tokenizer: standard
-            filter: ["lowercase", "stop", "snowball"]
-    mappings:
-      dynamic: true
-      properties:
-        title: {type: text, analyzer: arxiv_analyzer}
-        abstract: {type: text, analyzer: arxiv_analyzer}
-        text: {type: text, analyzer: arxiv_analyzer}
-        vector: {type: dense_vector, dims: 384}
+# elasticsearch:
+#   # General Load Settings
+#   load:
+#     index_name: "arxiv_chunks" 
+#     settings:
+#       index:
+#         number_of_shards: 1
+#         number_of_replicas: 0
+#       analysis:
+#         analyzer:
+#           arxiv_analyzer:
+#             type: custom
+#             tokenizer: standard
+#             filter: ["lowercase", "stop", "snowball"]
+#     mappings:
+#       dynamic: true
+#       properties:
+#         title: {type: text, analyzer: arxiv_analyzer}
+#         abstract: {type: text, analyzer: arxiv_analyzer}
+#         text: {type: text, analyzer: arxiv_analyzer}
+#         vector: {type: dense_vector, dims: 384}
 
 embeddings:
   path: "sentence-transformers/all-MiniLM-L6-v2"
@@ -79,3 +79,74 @@ embeddings:
 #     query: "retrieval_query"
 #   late_chunking: false
 #   embedding_type: "float"
+
+opensearch:
+  # OpenSearch Hybrid Index Configuration (BM25 + Vector Search)
+  index_name: "arxiv-papers-chunks"
+  load:
+    settings:
+      number_of_shards: 1
+      number_of_replicas: 0
+      index.knn: true
+      index.knn.space_type: "cosinesimil"
+      analysis:
+        analyzer:
+          standard_analyzer:
+            type: "standard"
+            stopwords: "_english_"
+          text_analyzer:
+            type: "custom"
+            tokenizer: "standard"
+            filter: ["lowercase", "stop", "snowball"]
+    mappings:
+      dynamic: "strict"
+      properties:
+        chunk_id: {type: keyword}
+        arxiv_id: {type: keyword}
+        paper_id: {type: keyword}
+        chunk_index: {type: integer}
+        chunk_text:
+          type: text
+          analyzer: text_analyzer
+          fields:
+            keyword: {type: keyword, ignore_above: 256}
+        chunk_word_count: {type: integer}
+        start_char: {type: integer}
+        end_char: {type: integer}
+        embedding:
+          type: knn_vector
+          dimension: 384  # txtai sentence-transformers dimension
+          method:
+            name: hnsw  # Hierarchical Navigable Small World
+            space_type: cosinesimil  # Cosine similarity
+            engine: nmslib
+            parameters:
+              ef_construction: 512  # Higher value = better recall, slower indexing
+              m: 16  # Number of bi-directional links
+        title:
+          type: text
+          analyzer: text_analyzer
+          fields:
+            keyword: {type: keyword, ignore_above: 256}
+        authors:
+          type: text
+          analyzer: standard_analyzer
+          fields:
+            keyword: {type: keyword, ignore_above: 256}
+        abstract: {type: text, analyzer: text_analyzer}
+        categories: {type: keyword}
+        published_date: {type: date}
+        section_title: {type: keyword}
+        embedding_model: {type: keyword}
+        created_at: {type: date}
+        updated_at: {type: date}
+
+  # Hybrid RRF Pipeline Configuration
+  hybrid_rrf_pipeline:
+    id: "hybrid-rrf-pipeline"
+    description: "Post processor for hybrid RRF search"
+    phase_results_processors:
+      - score-ranker-processor:
+          combination:
+            technique: rrf  # Reciprocal Rank Fusion
+            rank_constant: 60  # Default k=60 for RRF formula: 1/(k+rank)

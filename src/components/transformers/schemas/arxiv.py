@@ -99,4 +99,10 @@ class TextChunk(BaseModel):
     text: str
     arxiv_id: str
     section_title: str
+    title: str
+    authors: List[str]
+    abstract: str
+    categories: List[str]
+    published_date: str
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     metadata: ChunkMetadata

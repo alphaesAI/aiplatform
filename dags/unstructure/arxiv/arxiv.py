@@ -144,7 +144,7 @@ def embedder_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
 
 def loading_task(ti: Any, **kwargs: Any) -> None:
     """
-    Loads enriched Arxiv chunks into the Elasticsearch index.
+    Loads enriched Arxiv chunks into the OpenSearch index.
     args:
     ti: Airflow Task Instance for XCom access.
     returns:
@@ -152,12 +152,12 @@ def loading_task(ti: Any, **kwargs: Any) -> None:
     """
     enriched_data = ti.xcom_pull(task_ids='embed_chunks')
     es_creds = ti.xcom_pull(task_ids='get_es_creds')
-    config = load_yml(CONFIG_PATH).get('elasticsearch', {}).get('load', {})
+    config = load_yml(CONFIG_PATH).get('opensearch', {}).get('load', {})
     
     connector = ConnectorFactory.get_connector(connector_type="elasticsearch", config=es_creds)
     es_conn = connector()
     
-    loader = LoaderFactory.get_loader(load_type="elasticsearch", connection=es_conn, config=config)
+    loader = LoaderFactory.get_loader(load_type="opensearchbulk", connection=es_conn, config=config)
     loader(data=enriched_data)
     logger.info("Arxiv data loading complete.")
 

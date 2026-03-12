@@ -87,7 +87,7 @@ class TextChunker(BaseTransformer):
         if pdf.sections:
             return self._chunk_by_sections(pdf, source_id)
         
-        return self._chunk_raw_text(pdf.raw_text, source_id)
+        return self._chunk_raw_text(pdf.raw_text, source_id, 0, "Body", pdf)
 
     def _chunk_by_sections(self, pdf: PdfContent, source_id: str) -> List[TextChunk]:
         """
@@ -121,28 +121,28 @@ class TextChunker(BaseTransformer):
             # Flush buffer if we have one before starting this section
             if buffer:
                 combined = "\n\n".join(buffer)
-                chunks.append(self._build_chunk(combined, idx, source_id, "Combined Intro/Small Sections"))
+                chunks.append(self._build_chunk(combined, idx, source_id, "Combined Intro/Small Sections", pdf))
                 idx += 1
                 buffer, buffer_wc = [], 0
 
             # Case 2: Perfect size -> one chunk
             if 100 <= wc <= 800:
-                chunks.append(self._build_chunk(text, idx, source_id, sec.title))
+                chunks.append(self._build_chunk(text, idx, source_id, sec.title, pdf))
                 idx += 1
             
             # Case 3: Huge section -> slice with overlap
             else:
-                split_chunks = self._chunk_raw_text(text, source_id, idx, sec.title)
+                split_chunks = self._chunk_raw_text(text, source_id, idx, sec.title, pdf)
                 chunks.extend(split_chunks)
                 idx += len(split_chunks)
 
         # Final flush
         if buffer:
-            chunks.append(self._build_chunk("\n\n".join(buffer), idx, source_id, "Trailing Sections"))
+            chunks.append(self._build_chunk("\n\n".join(buffer), idx, source_id, "Trailing Sections", pdf))
         
         return chunks
 
-    def _chunk_raw_text(self, text: str, source_id: str, start_idx: int = 0, section_title: str = "Body") -> List[TextChunk]:
+    def _chunk_raw_text(self, text: str, source_id: str, start_idx: int = 0, section_title: str = "Body", pdf: PdfContent = None) -> List[TextChunk]:
         """
         Purpose:
             Sliding window chunking fallback. Used when sections aren't 
@@ -153,6 +153,7 @@ class TextChunker(BaseTransformer):
             source_id (str): Reference ID for the document.
             start_idx (int): Current chunk index offset.
             section_title (str): Title to associate with these chunks.
+            pdf (PdfContent): PDF object containing arxiv metadata.
 
         Returns:
             List[TextChunk]: Sequential overlapping chunks.
@@ -160,7 +161,7 @@ class TextChunker(BaseTransformer):
         words = re.findall(r"\S+", text)
         
         if len(words) <= self.min_chunk_size:
-            return [self._build_chunk(text, start_idx, source_id, section_title)]
+            return [self._build_chunk(text, start_idx, source_id, section_title, pdf)]
 
         chunks = []
         pos = 0
@@ -170,14 +171,14 @@ class TextChunker(BaseTransformer):
             end = min(pos + self.chunk_size, len(words))
             part = " ".join(words[pos:end])
             
-            chunks.append(self._build_chunk(part, current_idx, source_id, section_title))
+            chunks.append(self._build_chunk(part, current_idx, source_id, section_title, pdf))
             current_idx += 1
             # Move position forward by (Size - Overlap)
             pos += (self.chunk_size - self.overlap_size)
 
         return chunks
 
-    def _build_chunk(self, text: str, idx: int, source_id: str, section_title: str) -> TextChunk:
+    def _build_chunk(self, text: str, idx: int, source_id: str, section_title: str, pdf: PdfContent) -> TextChunk:
         """
         Purpose:
             Constructs the final validated Pydantic object with complete metadata.
@@ -187,6 +188,7 @@ class TextChunker(BaseTransformer):
             idx (int): Global index of the chunk within the document.
             source_id (str): Document ID (e.g., Arxiv ID).
             section_title (str): Contextual title for metadata.
+            pdf (PdfContent): PDF object containing arxiv metadata.
 
         Returns:
             TextChunk: Validated data model.
@@ -195,6 +197,11 @@ class TextChunker(BaseTransformer):
             text=text,
             arxiv_id=source_id,
             section_title=section_title,
+            title=pdf.title,
+            authors=pdf.authors,
+            abstract=pdf.abstract,
+            categories=pdf.categories,
+            published_date=pdf.published_date,
             metadata=ChunkMetadata(
                 chunk_index=idx,
                 section_title=section_title,
