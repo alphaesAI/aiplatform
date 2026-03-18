@@ -32,6 +32,16 @@ CONFIG_PATH = "dags/unstructure/arxiv/config/arxiv.yml"
 
 # --- Task Functions ---
 
+def get_qdrant_creds() -> Dict[str, Any]:
+    """
+    Fetches Qdrant credentials using the CredentialFactory.
+    Returns:
+        Dict[str, Any]: Qdrant connection credentials.
+    """
+    qdrant_creds = CredentialFactory.get_provider(mode="airflow", conn_id="qdrant").get_credentials()
+    logger.info("Successfully fetched Qdrant credentials.")
+    return qdrant_creds
+
 def get_arxiv_creds(**kwargs: Any) -> Dict[str, Any]:
     """
     Fetches Arxiv API credentials via the CredentialFactory.
@@ -144,20 +154,20 @@ def embedder_task(ti: Any, **kwargs: Any) -> List[Dict[str, Any]]:
 
 def loading_task(ti: Any, **kwargs: Any) -> None:
     """
-    Loads enriched Arxiv chunks into the OpenSearch index.
+    Loads enriched Arxiv chunks into the Qdrant collection.
     args:
     ti: Airflow Task Instance for XCom access.
     returns:
     None: Logs completion status.
     """
     enriched_data = ti.xcom_pull(task_ids='embed_chunks')
-    es_creds = ti.xcom_pull(task_ids='get_es_creds')
-    config = load_yml(CONFIG_PATH).get('opensearch', {}).get('load', {})
+    qdrant_creds = ti.xcom_pull(task_ids='get_qdrant_creds')
+    config = load_yml(CONFIG_PATH).get('qdrant', {}).get('load', {})
     
-    connector = ConnectorFactory.get_connector(connector_type="elasticsearch", config=es_creds)
-    es_conn = connector()
+    connector = ConnectorFactory.get_connector(connector_type="qdrant", config=qdrant_creds)
+    qdrant_conn = connector.connect()
     
-    loader = LoaderFactory.get_loader(load_type="opensearchbulk", connection=es_conn, config=config)
+    loader = LoaderFactory.get_loader(load_type="qdrant", connection=qdrant_conn, config=config)
     loader(data=enriched_data)
     logger.info("Arxiv data loading complete.")
 
@@ -172,21 +182,22 @@ with DAG(
     schedule="@monthly",
     catchup=False,
     max_active_runs=1,
-    tags=["arxiv", "docling", "txtai"]
+    tags=["arxiv", "docling", "txtai", "qdrant"]
 ) as dag:
 
-    t1 = PythonOperator(task_id='get_arxiv_creds', python_callable=get_arxiv_creds)
-    t2 = PythonOperator(task_id='get_es_creds', python_callable=get_es_creds)
+    arxiv_creds_task = PythonOperator(task_id='get_arxiv_creds', python_callable=get_arxiv_creds)
+    qdrant_creds_task = PythonOperator(task_id='get_qdrant_creds', python_callable=get_qdrant_creds)
     
-    t3 = PythonOperator(task_id='extract_pdfs', python_callable=extraction_task)
+    arxiv_extraction = PythonOperator(task_id='extract_pdfs', python_callable=extraction_task)
     
-    t4 = PythonOperator(task_id='pdf_to_structured_content', python_callable=transformation_task)
+    arxiv_transformation = PythonOperator(task_id='pdf_to_structured_content', python_callable=transformation_task)
     
-    t5 = PythonOperator(task_id='chunk_structured_content', python_callable=chunking_task)
+    arxiv_chunking = PythonOperator(task_id='chunk_structured_content', python_callable=chunking_task)
     
-    t6 = PythonOperator(task_id='embed_chunks', python_callable=embedder_task)
+    arxiv_embedder = PythonOperator(task_id='embed_chunks', python_callable=embedder_task)
     
-    t7 = PythonOperator(task_id='load_to_elasticsearch', python_callable=loading_task)
+    qdrant_loader = PythonOperator(task_id='load_to_qdrant', python_callable=loading_task)
 
     # Execution Flow
-    t1 >> t2 >> t3 >> t4 >> t5 >> t6 >> t7
+    arxiv_creds_task >> arxiv_extraction >> arxiv_transformation >> arxiv_chunking >> arxiv_embedder >> qdrant_loader
+    qdrant_creds_task >> qdrant_loader

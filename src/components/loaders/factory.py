@@ -1,6 +1,7 @@
 import logging
 from .elasticsearch import (ElasticsearchBulkIngestor,ElasticsearchSingleIngestor)
 from .opensearch import (OpensearchBulkIngestor,OpensearchSingleIngestor)
+from .qdrant import (QdrantIngestor)
 from .rdbms import RDBMSLoader
 from .schemas.ingestor import IngestorConfig
 
@@ -49,6 +50,9 @@ class LoaderFactory:
 
         elif load_type == "opensearchbulk":
             return OpensearchBulkIngestor(connection=connection, config=config)
+
+        elif load_type == "qdrant":
+            return QdrantIngestor(connection=connection, config=config)
 
         elif load_type == "rdbms":
             return RDBMSLoader(connection=connection, config=config)

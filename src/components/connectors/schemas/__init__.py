@@ -6,6 +6,7 @@ from .arxiv import ArxivConfig
 from .jina import JinaConfig
 from .api import ApiConfig
 from .s3 import S3Config
+from .qdrant import QdrantCloudConfig
 
 __all__ = [
     "ElasticsearchConfig",
@@ -16,4 +17,5 @@ __all__ = [
     "JinaConfig",
     "ApiConfig",
     "S3Config",
+    "QdrantCloudConfig",
 ]

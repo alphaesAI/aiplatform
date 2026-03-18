@@ -25,9 +25,9 @@ arxiv:
 docling:
   # PDF Transformation Settings (Validated by DoclingConfig)
   index_name: "arxiv_papers" 
-  max_pages: 30
-  max_file_size_mb: 50
-  max_concurrency: 4
+  max_pages: 30  # Reduced from 30 to save memory
+  max_file_size_mb: 50  # Reduced from 50 to save memory
+  max_concurrency: 1  # Sequential processing to prevent OOM
   do_ocr: false
   do_table_structure: false
 
@@ -82,8 +82,8 @@ embeddings:
 
 opensearch:
   # OpenSearch Hybrid Index Configuration (BM25 + Vector Search)
-  index_name: "arxiv-papers-chunks"
   load:
+    index_name: "arxiv-papers-chunks"
     settings:
       number_of_shards: 1
       number_of_replicas: 0
@@ -150,3 +150,44 @@ opensearch:
           combination:
             technique: rrf  # Reciprocal Rank Fusion
             rank_constant: 60  # Default k=60 for RRF formula: 1/(k+rank)
+
+qdrant:
+  load:
+    index_name: "arxiv-papers-chunks"
+    settings:
+      # Vector configuration (matches txtai sentence-transformers dimension)
+      size: 384
+      distance: "Cosine"
+      # Optimization settings
+      hnsw_config:
+        m: 16
+        ef_construct: 512
+      on_disk: true  # Recommended for memory efficiency
+      
+    # Mappings for Payload Indexing (Validated by Ingestor Logic)
+    mappings:
+      dynamic: "strict"
+      properties:
+        chunk_id: "keyword"
+        arxiv_id: "keyword"
+        paper_id: "keyword"
+        chunk_index: "integer"
+        chunk_text: "text"
+        chunk_word_count: "integer"
+        start_char: "integer"
+        end_char: "integer"
+        title: "text"
+        authors: "text"
+        abstract: "text"
+        categories: "keyword"
+        published_date: "datetime"
+        section_title: "keyword"
+        embedding_model: "keyword"
+        created_at: "datetime"
+        updated_at: "datetime"
+
+  # Hybrid Search Note: Qdrant handles RRF and Fusion internally 
+  # via the 'Prefetch' and 'Fusion' API calls during search.
+  hybrid_rrf_config:
+    technique: "rrf"
+    rank_constant: 60

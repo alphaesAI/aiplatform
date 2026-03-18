@@ -52,7 +52,7 @@ class PDFTransformer(BaseTransformer):
     async def __call__(self) -> List[Dict[str, Any]]:
         """
         Purpose:
-            Triggers the async transformation process and returns 
+            Triggers async transformation process and returns 
             standardized records for all provided PDFs.
 
         Returns:
@@ -64,19 +64,14 @@ class PDFTransformer(BaseTransformer):
 
         logger.info(f"Starting PDF transformation: {len(self.pdf_paths)} files")
         
-        # Create tasks for parallel processing
-        tasks = [self._process_single_pdf(p) for p in self.pdf_paths]
-        
-        # Gather results
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+        # Process files sequentially to avoid memory issues
         final_records = []
-        for res in results:
-            if isinstance(res, dict):
-                final_records.append(res)
-            elif isinstance(res, Exception):
-                logger.error(f"Transformation task failed: {res}")
+        for pdf_path in self.pdf_paths:
+            result = await self._process_single_pdf(pdf_path)
+            if result:
+                final_records.append(result)
                 
+        logger.info(f"Successfully transformed {len(final_records)} PDFs")
         return final_records
 
     async def _process_single_pdf(self, pdf_input: Union[Path, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -107,7 +102,7 @@ class PDFTransformer(BaseTransformer):
         async with self.semaphore:
             try:
                 # Parse PDF into structured Pydantic model
-                content: Optional[PdfContent] = await self.engine.parse_pdf(pdf_path)
+                content: Optional[PdfContent] = await self.engine.parse_pdf(pdf_path, metadata)
                 
                 if not content:
                     return None
@@ -115,11 +110,8 @@ class PDFTransformer(BaseTransformer):
                 # Convert model to dict for cleaning
                 raw_dict = content.model_dump()
 
-                # Merge the original Arxiv metadata with the new PDF text
-                # This ensures Title and Authors stay with the Chunks
-                combined_data = {**metadata, **raw_dict}
-                
-                return self.transform(combined_data)
+                # The engine already merged the metadata, so we just need to transform
+                return self.transform(raw_dict)
 
             except PDFValidationError as e:
                 logger.warning(f"Validation failed for {pdf_path.name}: {e}")

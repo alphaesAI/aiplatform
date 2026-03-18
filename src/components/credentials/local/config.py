@@ -29,6 +29,10 @@ CONNECTIONS = {
         "host": "localhost",
         "port": 9200,
     },
+    "qdrant": {
+        "url": "https://your-cluster-id.region.gcp.cloud.qdrant.io:6333",
+        "api_key": "your-secret-api-key"
+    },
     "s3": {
         "login": os.getenv("AWS_ACCESS_KEY_ID"),
         "password": os.getenv("AWS_SECRET_ACCESS_KEY"),

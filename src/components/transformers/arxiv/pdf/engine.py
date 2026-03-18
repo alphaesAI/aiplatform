@@ -52,6 +52,7 @@ class DoclingEngine(BaseTransformer):
         pipeline_options = PdfPipelineOptions(
             do_table_structure=self.config.do_table_structure,
             do_ocr=self.config.do_ocr,
+            ocr_options={"lang": ["en"]} if self.config.do_ocr else {"lang": [], "force_ocr": False}
         )
 
         self._converter = DocumentConverter(
@@ -59,20 +60,27 @@ class DoclingEngine(BaseTransformer):
                 InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
             }
         )
-        self._warmed_up = False
         logger.info(f"DoclingEngine ready | Max Pages: {self.max_pages}")
 
     def _warm_up_models(self):
         """
         Purpose:
-            Warms up Docling AI models on first use to reduce latency for 
-            subsequent conversion calls.
+            Pre-loads Docling models into memory for faster subsequent processing.
+            Optimized for memory efficiency.
         """
-        if not self._warmed_up:
+        if not hasattr(self, '_models_warmed'):
             logger.info("Warming Docling models...")
-            # Internal Docling warm-up happens on first convert() call, 
-            # but we flag it here for logging.
-            self._warmed_up = True
+            # Force garbage collection before warming
+            import gc
+            gc.collect()
+            
+            # Warm models with minimal memory footprint
+            self.docling_converter = DocumentConverter()
+            self._models_warmed = True
+            logger.info("Docling models ready.")
+            
+            # Force garbage collection after warming
+            gc.collect()
 
     def _validate_pdf(self, pdf_path: Path):
         """
@@ -108,7 +116,7 @@ class DoclingEngine(BaseTransformer):
         if pages > self.max_pages:
             raise PDFValidationError(f"Exceeds max pages ({pages} > {self.max_pages})")
 
-    async def parse_pdf(self, pdf_path: Path) -> Optional[PdfContent]:
+    async def parse_pdf(self, pdf_path: Path, arxiv_metadata: Optional[Dict[str, Any]] = None) -> Optional[PdfContent]:
         """
         Purpose:
             The main parsing pipeline. Validates the PDF and then uses 
@@ -116,6 +124,7 @@ class DoclingEngine(BaseTransformer):
 
         Args:
             pdf_path (Path): Local path to the PDF to be parsed.
+            arxiv_metadata (Optional[Dict[str, Any]]): ArXiv metadata to include in the result.
 
         Returns:
             Optional[PdfContent]: Structured content object or None if validation fails.
@@ -127,16 +136,15 @@ class DoclingEngine(BaseTransformer):
             self._validate_pdf(pdf_path)
             self._warm_up_models()
 
-            # Docling conversion
-            result = self._converter.convert(
-                str(pdf_path),
-                max_num_pages=self.max_pages,
-                max_file_size=self.max_file_size_bytes,
-            )
+            # 1. CONVERT TO DOCLING DOCUMENT
+            logger.info(f"Processing {pdf_path.name}")
+            doc = self.docling_converter.convert(str(pdf_path))
+            
+            # Force garbage collection after conversion
+            import gc
+            gc.collect()
 
-            doc = result.document       # we are pulling the structured content out of the "Result" wrapper so we can start looping through it to build our PaperSection and PaperTable objects.
-
-            # 1. EXTRACT SECTIONS
+            # 2. EXTRACT SECTIONS
             sections = []
             current = {"title": "Header/Intro", "content": ""}
 
@@ -193,6 +201,22 @@ class DoclingEngine(BaseTransformer):
                 )
 
             # 4. BUILD FINAL OBJECT
+            # Default values for required ArXiv metadata fields
+            default_metadata = {
+                "title": "",
+                "authors": [],
+                "pdf_url": "",
+                "abstract": "",
+                "arxiv_id": "",
+                "categories": [],
+                "local_pdf_path": str(pdf_path),
+                "published_date": ""
+            }
+            
+            # Merge with provided ArXiv metadata if available
+            if arxiv_metadata:
+                default_metadata.update(arxiv_metadata)
+            
             return PdfContent(
                 sections=sections,
                 figures=figures,
@@ -205,6 +229,8 @@ class DoclingEngine(BaseTransformer):
                     "file_stem": pdf_path.stem,
                     "total_pages": len(doc.pages) if hasattr(doc, "pages") else 0
                 },
+                # ArXiv metadata fields
+                **default_metadata
             )
 
         except PDFValidationError as e:
@@ -212,4 +238,11 @@ class DoclingEngine(BaseTransformer):
             return None
         except Exception as e:
             logger.error(f"DoclingEngine failure on {pdf_path.name}: {e}")
+            # Force garbage collection on error
+            import gc
+            gc.collect()
             raise PDFParsingException(f"Failed to parse {pdf_path.name}: {str(e)}")
+        finally:
+            # Clean up memory after processing
+            import gc
+            gc.collect()

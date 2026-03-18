@@ -17,6 +17,7 @@ from .jina import JinaConnector
 from .elasticsearch import ElasticsearchConnector
 from .opensearch import OpensearchConnector
 from .s3 import S3Connector
+from .qdrant import QdrantCloudConnector
 
 # Define the public API for the package
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "ElasticsearchConnector",
     "OpensearchConnector",
     "S3Connector",
+    "QdrantCloudConnector",
 ]
 
 # Set a default logger for the package to prevent "No handler found" warnings
