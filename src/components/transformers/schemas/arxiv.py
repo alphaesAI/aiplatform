@@ -34,6 +34,7 @@ class DoclingConfig(BaseModel):
     do_table_structure: bool = False
     do_ocr: bool = False
     max_concurrency: int
+    ocr_options: Optional[Dict[str, Any]] = None
 
 # --- The Main Engine Output ---
 class PdfContent(BaseModel):

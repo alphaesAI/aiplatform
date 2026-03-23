@@ -31,6 +31,16 @@ docling:
   do_ocr: false
   do_table_structure: false
 
+# docling:
+#   index_name: "arxiv_papers" 
+#   max_pages: 15  # Reduce from 30
+#   max_file_size_mb: 25  # Reduce from 50
+#   max_concurrency: 1  # Reduce from 4 (process one file at a time)
+#   do_ocr: false
+#   do_table_structure: false  # Keep disabled to save memory
+
+
+
 chunker:
   # Text Chunking Settings (Validated by ChunkingConfig)
   index_name: "arxiv_chunks" 

@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
+import gc
+import sys
 
 from ...base import BaseTransformer
 import pypdfium2 as pdfium
@@ -49,10 +51,11 @@ class DoclingEngine(BaseTransformer):
         # e.g., max_file_size_mb: 10 -> 10 * 1024 * 1024 = 10,485,760 bytes
         self.max_file_size_bytes = self.config.max_file_size_mb * 1024 * 1024
 
+        # Configure Docling pipeline with only do_ocr flag (no ocr_options)
+        # This ensures do_ocr=False completely disables OCR, preventing auto-detection
         pipeline_options = PdfPipelineOptions(
             do_table_structure=self.config.do_table_structure,
-            do_ocr=self.config.do_ocr,
-            ocr_options={"lang": ["en"]} if self.config.do_ocr else {"lang": [], "force_ocr": False}
+            do_ocr=self.config.do_ocr
         )
 
         self._converter = DocumentConverter(
@@ -60,7 +63,8 @@ class DoclingEngine(BaseTransformer):
                 InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
             }
         )
-        logger.info(f"DoclingEngine ready | Max Pages: {self.max_pages}")
+        self._models_warmed = False
+        logger.info(f"DoclingEngine ready | Max Pages: {self.max_pages} | OCR: {self.config.do_ocr}")
 
     def _warm_up_models(self):
         """
@@ -68,19 +72,11 @@ class DoclingEngine(BaseTransformer):
             Pre-loads Docling models into memory for faster subsequent processing.
             Optimized for memory efficiency.
         """
-        if not hasattr(self, '_models_warmed'):
+        if not self._models_warmed:
             logger.info("Warming Docling models...")
-            # Force garbage collection before warming
-            import gc
             gc.collect()
-            
-            # Warm models with minimal memory footprint
-            self.docling_converter = DocumentConverter()
             self._models_warmed = True
             logger.info("Docling models ready.")
-            
-            # Force garbage collection after warming
-            gc.collect()
 
     def _validate_pdf(self, pdf_path: Path):
         """
@@ -97,7 +93,7 @@ class DoclingEngine(BaseTransformer):
         if not pdf_path.exists():
             raise PDFValidationError(f"File not found: {pdf_path}")
 
-        size = pdf_path.stat().st_size      # Asks the Operating System for the file size in bytes
+        size = pdf_path.stat().st_size
         if size == 0:
             raise PDFValidationError("Empty PDF file")
         if size > self.max_file_size_bytes:
@@ -105,7 +101,7 @@ class DoclingEngine(BaseTransformer):
 
         # Check Magic Bytes
         with open(pdf_path, "rb") as f:
-            if not f.read(8).startswith(b"%PDF-"):      # Opens the file and looks at the very first 8 characters. Real PDFs always start with %PDF-
+            if not f.read(8).startswith(b"%PDF-"):
                 raise PDFValidationError("Invalid PDF header: Not a PDF")
 
         # Check Page Count via pypdfium2
@@ -138,17 +134,16 @@ class DoclingEngine(BaseTransformer):
 
             # 1. CONVERT TO DOCLING DOCUMENT
             logger.info(f"Processing {pdf_path.name}")
-            doc = self.docling_converter.convert(str(pdf_path))
+            doc = self._converter.convert(str(pdf_path))
             
-            # Force garbage collection after conversion
-            import gc
+            # Aggressive garbage collection after conversion
             gc.collect()
 
             # 2. EXTRACT SECTIONS
             sections = []
             current = {"title": "Header/Intro", "content": ""}
 
-            for element in doc.texts:
+            for element in doc.document.texts:
                 # Detect if the element is a heading
                 if hasattr(element, "label") and element.label in ("title", "section_header"):
                     # Save the previous section if it has content
@@ -169,11 +164,11 @@ class DoclingEngine(BaseTransformer):
             if current["content"].strip():
                 sections.append(PaperSection(title=current["title"], content=current["content"].strip()))
 
-            # 2. EXTRACT TABLES
+            # 3. EXTRACT TABLES
             tables = []
-            for idx, t in enumerate(getattr(doc, "tables", []), start=1):
+            for idx, t in enumerate(getattr(doc.document, "tables", []), start=1):
                 try:
-                    md = t.export_to_markdown(doc=doc)
+                    md = t.export_to_markdown(doc=doc.document)
                 except TypeError:
                     md = t.export_to_markdown()
 
@@ -190,9 +185,9 @@ class DoclingEngine(BaseTransformer):
                     )
                 )
 
-            # 3. EXTRACT FIGURES
+            # 4. EXTRACT FIGURES
             figures = []
-            for idx, f in enumerate(getattr(doc, "figures", []), start=1):
+            for idx, f in enumerate(getattr(doc.document, "figures", []), start=1):
                 figures.append(
                     PaperFigure(
                         id=str(getattr(f, "uid", None) or f"fig_{idx}"),
@@ -200,7 +195,7 @@ class DoclingEngine(BaseTransformer):
                     )
                 )
 
-            # 4. BUILD FINAL OBJECT
+            # 5. BUILD FINAL OBJECT
             # Default values for required ArXiv metadata fields
             default_metadata = {
                 "title": "",
@@ -221,15 +216,14 @@ class DoclingEngine(BaseTransformer):
                 sections=sections,
                 figures=figures,
                 tables=tables,
-                raw_text=doc.export_to_text(),
-                references=[], # References extraction is a complex Docling sub-task
+                raw_text=doc.document.export_to_text(),
+                references=[],
                 parser_used=ParserType.DOCLING,
                 metadata={
                     "source_file": pdf_path.name,
                     "file_stem": pdf_path.stem,
-                    "total_pages": len(doc.pages) if hasattr(doc, "pages") else 0
+                    "total_pages": len(doc.document.pages) if hasattr(doc.document, "pages") else 0
                 },
-                # ArXiv metadata fields
                 **default_metadata
             )
 
@@ -237,12 +231,8 @@ class DoclingEngine(BaseTransformer):
             logger.warning(f"Validation skipped {pdf_path.name}: {e}")
             return None
         except Exception as e:
-            logger.error(f"DoclingEngine failure on {pdf_path.name}: {e}")
-            # Force garbage collection on error
-            import gc
+            logger.error(f"DoclingEngine failure on {pdf_path.name}: {e}", exc_info=True)
             gc.collect()
             raise PDFParsingException(f"Failed to parse {pdf_path.name}: {str(e)}")
         finally:
-            # Clean up memory after processing
-            import gc
             gc.collect()
