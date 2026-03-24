@@ -4,6 +4,7 @@ from qdrant_client import QdrantClient, models
 from qdrant_client.http.exceptions import UnexpectedResponse
 from .base import BaseLoader
 from .schemas import IngestorConfig
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -85,9 +86,41 @@ class QdrantIngestor(BaseLoader):
         """Performs batch upsert to Qdrant Cloud."""
         logger.info(f"Starting bulk upload to {self.config.index_name}")
         try:
+            points = []
+            for i, record in enumerate(data):
+                if isinstance(record, dict):
+                    # Handle dictionary format from txtai embedder
+                    source_data = record.get("_source", record)
+                    
+                    # Debug logging to see the structure
+                    logger.debug(f"Record {i} keys: {list(source_data.keys())}")
+                    logger.debug(f"Record {i} id: {source_data.get('id')}")
+                    
+                    # Extract ID with fallbacks
+                    record_id = source_data.get("id")
+                    if not record_id:
+                        # Try other common ID fields
+                        record_id = source_data.get("chunk_id") or source_data.get("_id") or source_data.get("chunk_index")
+                    
+                    # Ensure we have a valid ID (convert to string if needed)
+                    if record_id is None:
+                        record_id = str(uuid.uuid4())
+                    else:
+                        record_id = str(record_id)
+                    
+                    point = models.PointStruct(
+                        id=record_id,
+                        vector=source_data.get("vector", []),
+                        payload=source_data
+                    )
+                    points.append(point)
+                else:
+                    # Already a PointStruct object
+                    points.append(record)
+            
             self.connection.upload_points(
                 collection_name=self.config.index_name,
-                points=data,
+                points=points,
                 batch_size=100,
                 wait=True
             )
