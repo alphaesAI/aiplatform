@@ -14,15 +14,8 @@ class ApiClient(private val context: Context) {
     
     companion object {
         private const val TAG = "ApiClient"
-        // Change this to your computer's IP address when testing on physical device
-        // For emulator, use 10.0.2.2
-        // For physical device on same network, use your computer's local IP (e.g., 192.168.1.100)
-        private const val BASE_URL = "http://10.0.2.2:8000/"
-        
-        // Alternative URLs for different scenarios:
-        // Emulator: "http://10.0.2.2:8000/"
-        // Physical device: "http://192.168.1.100:8000/" (replace with your IP)
-        // WSL: "http://localhost:8000/" (if port forwarding is set up)
+        // Physical device - use computer's IP address
+        private const val BASE_URL = "http://192.168.31.175:8000/"
     }
     
     private val httpClient = OkHttpClient.Builder()

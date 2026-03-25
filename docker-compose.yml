@@ -1,6 +1,41 @@
-version: '3.8'
-
 services:
+  # PostgreSQL Database - NEW!
+  postgres:
+    image: postgres:15-alpine
+    container_name: health-pipeline-postgres
+    environment:
+      POSTGRES_DB: health_pipeline
+      POSTGRES_USER: health_user
+      POSTGRES_PASSWORD: health_pass_2026
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - health-pipeline-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U health_user -d health_pipeline"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # FastAPI Server - NEW!
+  api:
+    build: ./api_server
+    container_name: health-pipeline-api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://health_user:health_pass_2026@postgres:5432/health_pipeline
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - health-pipeline-network
+    restart: unless-stopped
+
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     container_name: health-pipeline-elasticsearch
@@ -50,6 +85,8 @@ services:
     command: redis-server --appendonly yes
 
 volumes:
+  postgres_data:
+    driver: local
   elasticsearch_data:
     driver: local
   redis_data:

@@ -3,8 +3,11 @@ package com.healthpipeline.data
 import retrofit2.Response
 import retrofit2.http.*
 import com.google.gson.annotations.SerializedName
+import com.healthpipeline.data.models.HealthQueueRequest
+import com.healthpipeline.data.models.HealthQueueResponse
+import com.healthpipeline.data.models.QueueStatusResponse
 
-// API Request Models
+// Legacy API Request Models (keep for backward compatibility)
 data class HealthDataRequest(
     @SerializedName("user_id") val userId: String,
     @SerializedName("data_type") val dataType: String,
@@ -81,6 +84,18 @@ data class HealthSummaryResponse(
 // API Service Interface
 interface HealthApiService {
     
+    // NEW: Queue-based endpoints (PRIMARY)
+    @POST("api/health/queue")
+    suspend fun queueHealthData(
+        @Body request: HealthQueueRequest
+    ): Response<HealthQueueResponse>
+    
+    @GET("api/health/status/{queueId}")
+    suspend fun getQueueStatus(
+        @Path("queueId") queueId: String
+    ): Response<QueueStatusResponse>
+    
+    // Legacy endpoints (keep for backward compatibility)
     @POST("api/health/data")
     suspend fun sendHealthData(@Body request: HealthDataRequest): Response<ApiResponse>
     

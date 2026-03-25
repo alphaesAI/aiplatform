@@ -1,94 +1,81 @@
-package com.healthpipeline
+package com.healthpipeline.ui.screens
 
-import androidx.activity.compose.rememberLauncherForActivityResult
+import android.util.Log
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.lifecycleScope
-import com.healthpipeline.data.*
-import com.healthpipeline.ui.theme.HealthPipelineTheme
-import com.healthpipeline.utils.PermissionManager
-import com.healthpipeline.utils.PermissionStatus
-import kotlinx.coroutines.launch
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.*
+import com.healthpipeline.data.models.*
+import com.healthpipeline.viewmodels.HealthDataViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(modifier: Modifier = Modifier) {
+fun DashboardScreen(
+    viewModel: HealthDataViewModel,
+    onRequestPermissions: (Set<String>) -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     
-    // Managers and clients - with error handling
-    val permissionManager = remember { 
-        PermissionManager(context, context as androidx.activity.ComponentActivity) 
-    }
-    val apiClient = remember { ApiClient(context) }
-    val healthConnectManager = remember { HealthConnectManager(context) }
-    
-    // State management
-    var healthSummary by remember { mutableStateOf<HealthDataSummary?>(null) }
-    var permissionStatus by remember { mutableStateOf(PermissionStatus.SOME_MISSING) }
-    var isLoading by remember { mutableStateOf(false) }
-    var apiConnectionStatus by remember { mutableStateOf("Unknown") }
-    var currentJobId by remember { mutableStateOf<String?>(null) }
-    var processingStatus by remember { mutableStateOf<ProcessingStatusResponse?>(null) }
-    
-    // Permission launcher
-    val permissionLauncher = permissionManager.createPermissionLauncher { granted ->
-        if (granted) {
-            lifecycleOwner.lifecycleScope.launch {
-                isLoading = true
-                // TODO: Add health data loading when Health Connect is properly configured
-                permissionStatus = permissionManager.getPermissionStatus()
-                isLoading = false
-            }
-        }
-    }
-    
-    // Test API connection on startup
+    // Observe state from ViewModel
+    val healthData by viewModel.healthData.collectAsState()
+    val hasPermissions by viewModel.hasPermissions.collectAsState()
+    val permissionStatus by viewModel.permissionStatus.collectAsState()
+    val isLoadingData by viewModel.isLoadingData.collectAsState()
+    val cloudSyncStatus by viewModel.cloudSyncStatus.collectAsState()
+    val isSyncing by viewModel.isSyncing.collectAsState()
+
+    // Local UI state for Health Connect SDK
+    var healthConnectStatus by remember { mutableStateOf("Checking...") }
+    var isHealthConnectAvailable by remember { mutableStateOf(false) }
+
+    // Required permissions list for the button
+    val permissionsToRequest = setOf(
+        HealthPermission.getReadPermission(StepsRecord::class).toString(),
+        HealthPermission.getReadPermission(HeartRateRecord::class).toString(),
+        HealthPermission.getReadPermission(SleepSessionRecord::class).toString(),
+        HealthPermission.getReadPermission(DistanceRecord::class).toString(),
+        HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class).toString(),
+        HealthPermission.getReadPermission(ExerciseSessionRecord::class).toString()
+    )
+
+    // Check Health Connect SDK availability on startup
     LaunchedEffect(Unit) {
-        isLoading = true
-        
-        // Check permissions
-        permissionStatus = permissionManager.getPermissionStatus()
-        // TODO: Load health data when Health Connect is properly configured
-        
-        // Test API connection
-        val connectionResult = apiClient.testConnection()
-        apiConnectionStatus = when (connectionResult) {
-            is ApiResult.Success -> "Connected"
-            is ApiResult.Error -> "Disconnected: ${connectionResult.message}"
-        }
-        
-        isLoading = false
-    }
-    
-    // Poll processing status if job is running
-    LaunchedEffect(currentJobId) {
-        currentJobId?.let { jobId ->
-            while (processingStatus?.status in listOf("pending", "processing")) {
-                kotlinx.coroutines.delay(2000) // Poll every 2 seconds
-                
-                val statusResult = apiClient.safeApiCall {
-                    apiClient.healthApiService.getProcessingStatus(jobId)
+        try {
+            val availabilityStatus = HealthConnectClient.getSdkStatus(context)
+            when (availabilityStatus) {
+                HealthConnectClient.SDK_AVAILABLE -> {
+                    healthConnectStatus = "Available"
+                    isHealthConnectAvailable = true
                 }
-                
-                if (statusResult is ApiResult.Success) {
-                    processingStatus = statusResult.data
+                HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> {
+                    healthConnectStatus = "Available (Update Recommended)"
+                    isHealthConnectAvailable = true
+                }
+                else -> {
+                    healthConnectStatus = "Not Available"
+                    isHealthConnectAvailable = false
                 }
             }
+        } catch (e: Exception) {
+            healthConnectStatus = "Error: ${e.message}"
+            isHealthConnectAvailable = false
         }
     }
-    
+
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -99,48 +86,103 @@ fun DashboardScreen(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold
         )
         
-        // API Connection Status
-        Card(modifier = Modifier.fillMaxWidth()) {
+        // Overall Health Score Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    healthData.healthInsights.overallHealthScore >= 85 -> MaterialTheme.colorScheme.primaryContainer
+                    healthData.healthInsights.overallHealthScore >= 70 -> MaterialTheme.colorScheme.secondaryContainer
+                    healthData.healthInsights.overallHealthScore >= 55 -> MaterialTheme.colorScheme.tertiaryContainer
+                    else -> MaterialTheme.colorScheme.errorContainer
+                }
+            )
+        ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "API Connection",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val (statusText, statusColor) = when {
-                        apiConnectionStatus == "Connected" -> "● CONNECTED" to MaterialTheme.colorScheme.primary
-                        apiConnectionStatus.startsWith("Disconnected") -> "● DISCONNECTED" to MaterialTheme.colorScheme.error
-                        else -> "● CHECKING..." to MaterialTheme.colorScheme.outline
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Overall Health Score",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = healthData.healthInsights.activityLevel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    
                     Text(
-                        text = statusText,
-                        color = statusColor
+                        text = "${healthData.healthInsights.overallHealthScore}/100",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
                 
-                if (apiConnectionStatus.startsWith("Disconnected")) {
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                LinearProgressIndicator(
+                    progress = { healthData.healthInsights.overallHealthScore / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        text = apiConnectionStatus,
+                        text = "Trend: ${healthData.healthInsights.healthTrend}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    
-                    OutlinedButton(
-                        onClick = {
-                            lifecycleOwner.lifecycleScope.launch {
-                                val result = apiClient.testConnection()
-                                apiConnectionStatus = when (result) {
-                                    is ApiResult.Success -> "Connected"
-                                    is ApiResult.Error -> "Disconnected: ${result.message}"
-                                }
+                    Text(
+                        text = "Goal: ${healthData.healthInsights.fitnessGoalProgress}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        
+        // Achievements & Recommendations
+        if (healthData.healthInsights.achievements.isNotEmpty() || healthData.healthInsights.recommendations.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (healthData.healthInsights.achievements.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("🏆 Achievements", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            healthData.healthInsights.achievements.forEach { achievement ->
+                                Text(achievement, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
                             }
                         }
+                    }
+                }
+                if (healthData.healthInsights.recommendations.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                     ) {
-                        Text("Retry Connection")
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("💡 Tips", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            healthData.healthInsights.recommendations.take(2).forEach { recommendation ->
+                                Text(recommendation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            }
+                        }
                     }
                 }
             }
@@ -149,90 +191,77 @@ fun DashboardScreen(modifier: Modifier = Modifier) {
         // Health Connect Status Card
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Health Connect Status",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text("Health Connect Status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                when (permissionStatus) {
-                    PermissionStatus.ALL_GRANTED -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "● CONNECTED",
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val (statusText, statusColor) = when {
+                        healthConnectStatus.contains("Available") && hasPermissions -> "● CONNECTED" to MaterialTheme.colorScheme.primary
+                        healthConnectStatus.contains("Available") && !hasPermissions -> "● PERMISSIONS NEEDED" to MaterialTheme.colorScheme.error
+                        healthConnectStatus == "Checking..." -> "● CHECKING..." to MaterialTheme.colorScheme.outline
+                        else -> "● NOT AVAILABLE" to MaterialTheme.colorScheme.error
                     }
-                    PermissionStatus.SOME_MISSING -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "● PERMISSIONS NEEDED",
-                                color = MaterialTheme.colorScheme.error
-                            )
+                    Text(text = statusText, color = statusColor)
+                }
+                
+                if (permissionStatus != "All permissions granted" && permissionStatus != "Checking...") {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "Status: $permissionStatus", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { 
+                        if (permissionStatus.contains("grant permissions in Health Connect", ignoreCase = true)) {
+                            onOpenSettings()
+                        } else {
+                            onRequestPermissions(permissionsToRequest)
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Button(
-                            onClick = { permissionManager.requestPermissions(permissionLauncher) }
-                        ) {
-                            Text("Grant Health Permissions")
+                    },
+                    enabled = isHealthConnectAvailable && !hasPermissions
+                ) {
+                    Text(
+                        when {
+                            !isHealthConnectAvailable -> "Health Connect Unavailable"
+                            hasPermissions -> "Permissions Granted"
+                            else -> "Grant Permissions"
                         }
-                    }
-                    PermissionStatus.HEALTH_CONNECT_NOT_AVAILABLE -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "● NOT AVAILABLE",
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                        Text(
-                            text = "Health Connect is not installed on this device",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    )
                 }
             }
         }
         
-        // Processing Status (if job is running)
-        processingStatus?.let { status ->
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Processing Status",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    Text(
-                        text = "Job: ${status.jobId.take(8)}...",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(
-                        text = "Status: ${status.status.uppercase()}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    
-                    if (status.currentStage != null) {
+        // Cloud Sync Status Card
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Cloud Sync", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(
-                            text = "Stage: ${status.currentStage}",
-                            style = MaterialTheme.typography.bodySmall
+                            text = cloudSyncStatus,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = when {
+                                cloudSyncStatus.contains("successfully") -> MaterialTheme.colorScheme.primary
+                                cloudSyncStatus.contains("failed") -> MaterialTheme.colorScheme.error
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { status.progress.toFloat() },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = "${(status.progress * 100).toInt()}% - ${status.recordsProcessed}/${status.recordsTotal} records",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    Button(
+                        onClick = { viewModel.syncData() },
+                        enabled = hasPermissions && healthData.steps > 0 && !isSyncing,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onTertiary)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text("Sync to Cloud")
+                    }
                 }
             }
         }
@@ -240,192 +269,200 @@ fun DashboardScreen(modifier: Modifier = Modifier) {
         // Quick Actions
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Quick Actions",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text("Quick Actions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(
+                Button(
+                    onClick = { viewModel.loadHealthData() },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    enabled = hasPermissions && !isLoadingData
                 ) {
-                    Button(
-                        onClick = { 
-                            lifecycleOwner.lifecycleScope.launch {
-                                if (permissionStatus == PermissionStatus.ALL_GRANTED && 
-                                    apiConnectionStatus == "Connected") {
-                                    
-                                    isLoading = true
-                                    
-                                    // Get health data from Health Connect
-                                    val stepsData = healthConnectManager.getTodaySteps()
-                                    val heartRateData = healthConnectManager.getTodayHeartRate()
-                                    val sleepData = healthConnectManager.getLastNightSleep()
-                                    
-                                    // Prepare API request
-                                    val healthDataList = mutableListOf<Any>()
-                                    stepsData?.let { stepData ->
-                                        healthDataList.add(mapOf(
-                                            "timestamp" to stepData.timestamp,
-                                            "steps" to stepData.steps
-                                        ))
-                                    }
-                                    
-                                    if (healthDataList.isNotEmpty()) {
-                                        val request = HealthDataRequest(
-                                            userId = "user_${System.currentTimeMillis()}",
-                                            dataType = "steps",
-                                            data = healthDataList
-                                        )
-                                        
-                                        // Send to API
-                                        val result = apiClient.safeApiCall {
-                                            apiClient.healthApiService.sendHealthData(request)
-                                        }
-                                        
-                                        when (result) {
-                                            is ApiResult.Success -> {
-                                                currentJobId = result.data.jobId
-                                                // Start polling for status
-                                            }
-                                            is ApiResult.Error -> {
-                                                // Handle error
-                                            }
-                                        }
-                                    }
-                                    
-                                    isLoading = false
-                                }
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = permissionStatus == PermissionStatus.ALL_GRANTED && 
-                                 apiConnectionStatus == "Connected" && 
-                                 !isLoading &&
-                                 processingStatus?.status !in listOf("pending", "processing")
-                    ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text("Extract Data")
-                        }
+                    if (isLoadingData) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
-                    
-                    OutlinedButton(
-                        onClick = { /* TODO: Navigate to analytics */ },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("View Results")
-                    }
+                    Text("Refresh Health Data")
                 }
             }
         }
         
-        // Health Data Display (existing code)
-        if (isLoading && processingStatus == null) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
+        // Basic Metrics (Steps & HR)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Card(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "${healthData.steps}", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(text = "Steps Today", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-        } else if (healthSummary != null && permissionStatus == PermissionStatus.ALL_GRANTED) {
-            // Health Data Cards
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Steps Card
-                Card(modifier = Modifier.weight(1f)) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "${healthSummary?.stepsData?.steps ?: 0}",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "Steps Today",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                
-                // Heart Rate Card
-                Card(modifier = Modifier.weight(1f)) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "${healthSummary?.heartRateData?.averageBpm ?: "--"}",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        Text(
-                            text = "Avg Heart Rate",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-            
-            // Sleep Card
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Sleep Last Night",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = healthSummary?.sleepData?.getFormattedDuration() ?: "No data",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-                }
-            }
-        } else {
-            // No data available
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Health data will appear here",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "Grant permissions and ensure API connection",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            Card(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = if (healthData.heartRateZones.averageHR > 0) "${healthData.heartRateZones.averageHR}" else "--", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.secondary)
+                    Text(text = "Avg Heart Rate", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
+
+        // Distance & Calories
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Card(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = if (healthData.distanceKm > 0) String.format("%.1f", healthData.distanceKm) else "0.0", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.tertiary)
+                    Text(text = "Distance (km)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Card(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = "${healthData.caloriesBurned}", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.error)
+                    Text(text = "Calories Burned", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        // Heart Rate Zones
+        if (healthData.heartRateZones.averageHR > 0) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Heart Rate Zones", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("${healthData.heartRateZones.restingMinutes}m", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("Resting", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("${healthData.heartRateZones.fatBurnMinutes}m", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("Fat Burn", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("${healthData.heartRateZones.cardioMinutes}m", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("Cardio", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Card(modifier = Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                            Column(modifier = Modifier.padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("${healthData.heartRateZones.peakMinutes}m", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text("Peak", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Recent Activity Details
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "🏃 Recent Activity Details", 
+                    style = MaterialTheme.typography.titleMedium, 
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Row 1: Activity & Duration
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    ActivityStatColumn(
+                        label = "Activity", 
+                        // Note: If your HealthData doesn't have these exact variables yet, replace with placeholder strings like "Walking" temporarily
+                        value = "Walking" 
+                    )
+                    ActivityStatColumn(
+                        label = "Duration", 
+                        value = "45 min" 
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, thickness = 1.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Row 2: Timing
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    ActivityStatColumn(label = "Start Time", value = "08:30 AM")
+                    ActivityStatColumn(label = "End Time", value = "09:15 AM")
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, thickness = 1.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Row 3: Intensity & Speed
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    ActivityStatColumn(label = "Active Zone", value = "30 min")
+                    ActivityStatColumn(label = "Speed", value = "1.4 m/s")
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant, thickness = 1.dp)
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Row 4: Elevation
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                    ActivityStatColumn(label = "Elevation Gain", value = "120 m")
+                }
+            }
+        }
+        // Sleep Analysis
+        if (healthData.sleepAnalysis.totalSleepHours > 0) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("Sleep Analysis", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Card(colors = CardDefaults.cardColors(containerColor = if (healthData.sleepAnalysis.sleepQualityScore >= 80) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer)) {
+                            Text("${healthData.sleepAnalysis.sleepQualityScore}%", modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column {
+                            Text("${String.format("%.1f", healthData.sleepAnalysis.totalSleepHours)}h", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            Text("Total Sleep", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("${healthData.sleepAnalysis.sleepEfficiency}%", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold)
+                            Text("Efficiency", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Status Message at bottom
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = when {
+                        hasPermissions && !isLoadingData -> "Health data loaded successfully"
+                        hasPermissions && isLoadingData -> "Loading health data..."
+                        isHealthConnectAvailable -> "Grant permissions to continue"
+                        else -> "Health Connect is not available"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp)) // Bottom padding
     }
 }
 
-@Preview(showBackground = true)
 @Composable
-fun DashboardScreenPreview() {
-    HealthPipelineTheme {
-        DashboardScreen()
+fun ActivityStatColumn(label: String, value: String) {
+    Column {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
