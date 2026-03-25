@@ -26,18 +26,27 @@ object HealthDataMapper {
         return HealthQueueRequest(
             pseudoId = userId,
             date = today.format(dateFormatter),
-            durationMinutes = healthData.activeMinutes.toFloat(),
+            durationMinutes = healthData.activeMinutes.toDouble(),
             activityName = healthData.lastExerciseType.takeIf { it != "None" },
             startTime = now.minusMinutes(healthData.activeMinutes.toLong()).format(dateTimeFormatter),
             endTime = now.format(dateTimeFormatter),
             avgHrBpm = healthData.heartRateZones.averageHR.takeIf { it > 0 },
             maxHrBpm = healthData.heartRateZones.maxHR.takeIf { it > 0 },
-            elevationGainM = null, // Not available from Health Connect
-            distanceMeters = (healthData.distanceKm * 1000).toFloat(),
-            caloriesKcal = healthData.caloriesBurned.toFloat(),
+            elevationGainM = null, 
+            distanceMeters = healthData.distanceKm * 1000.0,
+            caloriesKcal = healthData.caloriesBurned.toDouble(),
             steps = healthData.steps,
             activeZoneMinutes = healthData.activeMinutes,
-            speedMps = speedMps
+            speedMps = speedMps?.toDouble(),
+
+            
+            restingHrMins = healthData.heartRateZones.restingMinutes,
+            fatBurnMins = healthData.heartRateZones.fatBurnMinutes,
+            cardioMins = healthData.heartRateZones.cardioMinutes,
+            peakMins = healthData.heartRateZones.peakMinutes,
+            sleepHours = healthData.sleepAnalysis.totalSleepHours,
+            sleepQualityScore = healthData.sleepAnalysis.sleepQualityScore,
+            sleepEfficiency = healthData.sleepAnalysis.sleepEfficiency
         )
     }
 }

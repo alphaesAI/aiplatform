@@ -44,6 +44,13 @@ class HealthDataRequest(BaseModel):
     steps: Optional[int] = None
     active_zone_minutes: Optional[int] = None
     speed_mps: Optional[float] = None
+    resting_hr_mins: Optional[int] = None
+    fat_burn_mins: Optional[int] = None
+    cardio_mins: Optional[int] = None
+    peak_mins: Optional[int] = None
+    sleep_hours: Optional[float] = None
+    sleep_quality_score: Optional[int] = None
+    sleep_efficiency: Optional[int] = None
 
 class HealthDataResponse(BaseModel):
     queue_id: str
@@ -61,14 +68,21 @@ async def queue_health_data(data: HealthDataRequest, db: Session = Depends(get_d
                 queue_id, pseudo_id, date, duration_minutes, activity_name,
                 start_time, end_time, avg_hr_bpm, max_hr_bpm, elevation_gain_m,
                 distance_meters, calories_kcal, steps, active_zone_minutes,
-                speed_mps, status
+                speed_mps, status,
+                -- ADD THESE NEW COLUMNS --
+                resting_hr_mins, fat_burn_mins, cardio_mins, peak_mins,
+                sleep_hours, sleep_quality_score, sleep_efficiency
             ) VALUES (
                 :queue_id, :pseudo_id, :date, :duration_minutes, :activity_name,
                 :start_time, :end_time, :avg_hr_bpm, :max_hr_bpm, :elevation_gain_m,
                 :distance_meters, :calories_kcal, :steps, :active_zone_minutes,
-                :speed_mps, 'pending'
+                :speed_mps, 'pending',
+                -- ADD THESE NEW PLACEHOLDERS --
+                :resting_hr_mins, :fat_burn_mins, :cardio_mins, :peak_mins,
+                :sleep_hours, :sleep_quality_score, :sleep_efficiency
             )
         """)
+
         
         db.execute(query, {
             "queue_id": queue_id,
@@ -85,7 +99,15 @@ async def queue_health_data(data: HealthDataRequest, db: Session = Depends(get_d
             "calories_kcal": data.calories_kcal,
             "steps": data.steps,
             "active_zone_minutes": data.active_zone_minutes,
-            "speed_mps": data.speed_mps
+            "speed_mps": data.speed_mps,
+            # --- ADD THESE NEW MAPPINGS ---
+            "resting_hr_mins": data.resting_hr_mins,
+            "fat_burn_mins": data.fat_burn_mins,
+            "cardio_mins": data.cardio_mins,
+            "peak_mins": data.peak_mins,
+            "sleep_hours": data.sleep_hours,
+            "sleep_quality_score": data.sleep_quality_score,
+            "sleep_efficiency": data.sleep_efficiency
         })
         db.commit()
         

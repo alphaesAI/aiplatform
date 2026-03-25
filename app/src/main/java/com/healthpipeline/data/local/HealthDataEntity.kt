@@ -29,5 +29,12 @@ data class HealthDataEntity(
     val retryCount: Int = 0,
     val errorMessage: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val restingHrMins: Int? = null,
+    val fatBurnMins: Int? = null,
+    val cardioMins: Int? = null,
+    val peakMins: Int? = null,
+    val sleepHours: Double? = null,
+    val sleepQualityScore: Int? = null,
+    val sleepEfficiency: Int? = null
 )
