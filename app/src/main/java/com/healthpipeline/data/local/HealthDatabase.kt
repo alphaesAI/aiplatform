@@ -5,8 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-// 1. INCREMENT THE VERSION (Change from 1 to 2)
-@Database(entities = [HealthDataEntity::class], version = 2, exportSchema = false)
+// 1. INCREMENT THE VERSION (Change from 2 to 3)
+@Database(entities = [HealthDataEntity::class], version = 3, exportSchema = false)
 abstract class HealthDatabase : RoomDatabase() {
 
     abstract fun healthDataDao(): HealthDataDao

@@ -9,32 +9,56 @@ data class HealthDataEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
     val queueId: String = UUID.randomUUID().toString(),
-    val pseudoId: String,
-    val date: String,
-    val durationMinutes: Float? = null,
-    val activityName: String? = null,
-    val startTime: String? = null,
-    val endTime: String? = null,
-    val avgHrBpm: Int? = null,
-    val maxHrBpm: Int? = null,
-    val elevationGainM: Float? = null,
-    val distanceMeters: Float? = null,
-    val caloriesKcal: Float? = null,
-    val steps: Int? = null,
-    val activeZoneMinutes: Int? = null,
-    val speedMps: Float? = null,
     
-    // Sync tracking fields
+    // Core Identity & Session
+    val pseudoId2: String,
+    val date: String,
+    val datetime: String,
+    val duration: Long,
+    val activityName: String,
+    val startTime: String,
+    val endTime: String,
+    val averageHeartRate: Int,
+    val elevationGain: Double,
+    val distance: Double,
+    val calories: Int,
+    val steps: Int,
+    val speed: Double,
+
+    // Biometrics
+    val age: Int,
+    val gender: String,
+    val weightKg: Double,
+    val heightCm: Double,
+
+    // Vitals
+    val restingHeartRate: Int,
+    val heartRateVariability: Double,
+    val stressManagementScore: Int,
+
+    // Active Zones
+    val activeZoneMinutes: Int,
+    val fatburnActiveZoneMinutes: Int,
+    val cardioActiveZoneMinutes: Int,
+    val peakActiveZoneMinutes: Int,
+
+    // Sleep
+    val bedTime: String,
+    val wakeUpTime: String,
+    val sleepMinutes: Int,
+    val awakeMinutes: Int,
+    val remSleepMinutes: Int,
+    val lightSleepMinutes: Int,
+    val deepSleepMinutes: Int,
+    val awakePercent: Double,
+    val remSleepPercent: Double,
+    val lightSleepPercent: Double,
+    val deepSleepPercent: Double,
+
+    // Sync Tracking fields
     val status: String = "pending",
     val retryCount: Int = 0,
     val errorMessage: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis(),
-    val restingHrMins: Int? = null,
-    val fatBurnMins: Int? = null,
-    val cardioMins: Int? = null,
-    val peakMins: Int? = null,
-    val sleepHours: Double? = null,
-    val sleepQualityScore: Int? = null,
-    val sleepEfficiency: Int? = null
+    val updatedAt: Long = System.currentTimeMillis()
 )

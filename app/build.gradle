@@ -79,6 +79,9 @@ dependencies {
     // WorkManager for background sync
     implementation "androidx.work:work-runtime-ktx:2.9.0"
 
+    // Security (EncryptedSharedPreferences)
+    implementation "androidx.security:security-crypto:1.1.0-alpha06"
+
     
 
     // ==========================================
@@ -90,8 +93,8 @@ dependencies {
     kapt "androidx.room:room-compiler:$room_version"
     // ==========================================
 
-
-    
+    implementation("androidx.compose.material:material:1.5.0")
+    implementation("androidx.browser:browser:1.8.0")
     // Testing
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

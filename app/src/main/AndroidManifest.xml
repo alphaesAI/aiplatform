@@ -2,21 +2,31 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Health Connect Permissions -->
+    <!-- 🚀 REQUIRED: Health Connect Permissions -->
     <uses-permission android:name="android.permission.health.READ_STEPS" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
     <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_SPEED" />
+    <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_HEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
     
-    <!-- Internet permission for API calls -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    
+    <!-- 🚀 REQUIRED: Android 14 Health Permissions -->
+    <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
 
-    <!-- Query Health Connect package -->
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
+        <intent>
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
+        </intent>
     </queries>
 
     <application
@@ -27,24 +37,42 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.HealthPipeline"
         android:networkSecurityConfig="@xml/network_security_config"
-        tools:targetApi="31">
+        android:usesCleartextTraffic="true"
+        tools:targetApi="34">
         
-        <!-- Health Connect metadata -->
+        <!-- 🚀 REQUIRED: Tell OS we use Health Connect -->
         <meta-data
-            android:name="android.permission.health.READ_PERMISSION"
-            android:value="true" />
+            android:name="health_permissions_rationale_activity"
+            android:value=".MainActivity" />
         
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.HealthPipeline">
+            
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- 🚀 REQUIRED: For OAuth Redirects -->
+            <intent-filter android:label="oauth_callback">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data 
+                    android:scheme="phia" 
+                    android:host="auth" 
+                    android:path="/callback" />
+            </intent-filter>
+            
+            <!-- 🚀 REQUIRED: Health Connect Rationale Action -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
         </activity>
         
-        <!-- Health Connect integration -->
         <activity-alias
             android:name="ViewPermissionUsageActivity"
             android:exported="true"

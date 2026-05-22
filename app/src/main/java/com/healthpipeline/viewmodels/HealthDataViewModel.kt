@@ -1,13 +1,18 @@
 package com.healthpipeline.viewmodels
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.healthpipeline.data.models.HealthData
 import com.healthpipeline.data.repository.HealthRepository
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class HealthDataViewModel(
     private val repository: HealthRepository
@@ -30,6 +35,9 @@ class HealthDataViewModel(
 
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+    
+    private val _syncMessage = MutableStateFlow<String?>(null)
+    val syncMessage: StateFlow<String?> = _syncMessage.asStateFlow()
 
     fun checkPermissions() {
         viewModelScope.launch {
@@ -51,24 +59,81 @@ class HealthDataViewModel(
         }
     }
 
+    /**
+     * 🚀 FIXED: Now accepts the Real User ID from Auth
+     */
+    fun syncData(userId: String?) {
+        Log.d("HealthViewModel", "🔄 Sync requested for user: $userId")
+        if (userId == null) {
+            _syncMessage.value = "❌ Authentication required to sync"
+            return
+        }
 
-    fun syncData() {
         viewModelScope.launch {
             val currentData = _healthData.value
-            if (currentData.steps > 0) {
-                _isSyncing.value = true
-                _cloudSyncStatus.value = "Syncing..."
-                
-                val result = repository.syncHealthData(currentData)
+            Log.d("HealthViewModel", "📊 Data to sync: Steps=${currentData.totalSteps}, Active=${currentData.totalActiveMinutes}")
+            
+            if (currentData.totalSteps == 0 && currentData.totalActiveMinutes == 0) {
+                Log.w("HealthViewModel", "⚠️ Skipping sync: No activity data found")
+                _syncMessage.value = "⚠️ No health data to sync"
+                delay(2000)
+                _syncMessage.value = null
+                return@launch
+            }
+            
+            _isSyncing.value = true
+            _cloudSyncStatus.value = "Syncing..."
+            
+            try {
+                Log.d("HealthViewModel", "🚀 Triggering repository sync...")
+                val result = repository.syncHealthData(currentData, userId)
                 
                 if (result.isSuccess) {
-                    _cloudSyncStatus.value = "Synced successfully"
+                    Log.i("HealthViewModel", "✅ Sync Success!")
+                    _cloudSyncStatus.value = "Last synced: ${getCurrentTime()}"
+                    _syncMessage.value = "✅ Synced successfully"
                 } else {
+                    val error = result.exceptionOrNull()?.message ?: "Unknown error"
+                    Log.e("HealthViewModel", "❌ Sync Failed: $error")
                     _cloudSyncStatus.value = "Sync failed"
+                    _syncMessage.value = "❌ Sync failed: $error"
                 }
-                
+            } catch (e: Exception) {
+                Log.e("HealthViewModel", "❌ Sync Exception", e)
+                _cloudSyncStatus.value = "Sync error"
+                _syncMessage.value = "❌ Error: ${e.message}"
+            } finally {
                 _isSyncing.value = false
+                delay(3000)
+                _syncMessage.value = null
             }
+        }
+    }
+    
+    private fun getCurrentTime(): String {
+        val formatter = SimpleDateFormat("HH:mm", Locale.getDefault())
+        return formatter.format(Date())
+    }
+    
+    fun clearSyncMessage() {
+        _syncMessage.value = null
+    }
+    
+    /**
+     * Update biometrics with manually entered age and gender
+     * (Health Connect doesn't store these, so we save locally)
+     */
+    fun updateBiometrics(age: Int?, gender: String?) {
+        viewModelScope.launch {
+            val currentData = _healthData.value
+            val updatedBiometrics = currentData.biometrics.copy(
+                age = age,
+                gender = gender
+            )
+            _healthData.value = currentData.copy(
+                biometrics = updatedBiometrics
+            )
+            Log.d("HealthViewModel", "📊 Updated biometrics - Age: $age, Gender: $gender")
         }
     }
 }

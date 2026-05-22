@@ -1,67 +1,50 @@
 package com.healthpipeline.ui.components
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
-import androidx.navigation.NavController
-import androidx.navigation.compose.currentBackStackEntryAsState
-
-// Navigation items data class
-data class NavigationItem(
-    val route: String,
-    val icon: String,
-    val label: String
-)
-
-// Navigation items list
-val navigationItems = listOf(
-    NavigationItem("dashboard", "🏠", "Dashboard"),
-    NavigationItem("data_selection", "📋", "Data"),
-    NavigationItem("pipeline_status", "⚡", "Pipeline"),
-    NavigationItem("analytics", "📊", "Analytics"),
-    NavigationItem("settings", "⚙️", "Settings")
-)
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 @Composable
-fun BottomNavigationBar(
-    navController: NavController
+fun PHIABottomNavigation(
+    currentScreen: String,
+    onNavigate: (String) -> Unit
 ) {
-    val currentBackStackEntry = navController.currentBackStackEntryAsState()
-    val currentRoute = currentBackStackEntry.value?.destination?.route
-    
-    NavigationBar {
-        navigationItems.forEach { item ->
+    val navColor = Color(0xFF16181E)
+    val accentColor = Color(0xFFFF6B6B)
+    val inactiveColor = Color(0xFF6E7481)
+
+    NavigationBar(
+        containerColor = navColor,
+        tonalElevation = 12.dp
+    ) {
+        val items = listOf(
+            Triple("Home", "home", Icons.Default.Home),
+            Triple("Activity", "activity", Icons.Default.List),
+            Triple("Profile", "profile", Icons.Default.Person),
+            Triple("Settings", "settings", Icons.Default.Settings)
+        )
+
+        items.forEach { (label, route, icon) ->
             NavigationBarItem(
-                icon = { 
-                    Text(
-                        text = item.icon,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                },
-                label = { 
-                    Text(
-                        text = item.label,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                },
-                selected = currentRoute == item.route,
-                onClick = {
-                    if (currentRoute != item.route) {
-                        navController.navigate(item.route) {
-                            // Pop up to the start destination of the graph to
-                            // avoid building up a large stack of destinations
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
-                            }
-                            // Avoid multiple copies of the same destination when
-                            // reselecting the same item
-                            launchSingleTop = true
-                            // Restore state when reselecting a previously selected item
-                            restoreState = true
-                        }
-                    }
-                }
+                selected = currentScreen == route,
+                onClick = { onNavigate(route) },
+                icon = { Icon(icon, contentDescription = label) },
+                label = { Text(label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = accentColor,
+                    selectedTextColor = accentColor,
+                    unselectedIconColor = inactiveColor,
+                    unselectedTextColor = inactiveColor,
+                    indicatorColor = Color.Transparent
+                )
             )
         }
     }

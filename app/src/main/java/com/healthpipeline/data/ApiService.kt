@@ -7,114 +7,235 @@ import com.healthpipeline.data.models.HealthQueueRequest
 import com.healthpipeline.data.models.HealthQueueResponse
 import com.healthpipeline.data.models.QueueStatusResponse
 
-// Legacy API Request Models (keep for backward compatibility)
-data class HealthDataRequest(
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("data_type") val dataType: String,
-    @SerializedName("data") val data: List<Any>,
-    @SerializedName("metadata") val metadata: Map<String, Any>? = null
+// --- OAuth2 Models ---
+data class TokenResponse(
+    @SerializedName("access_token") val accessToken: String,
+    @SerializedName("refresh_token") val refreshToken: String?,
+    @SerializedName("id_token") val idToken: String?,
+    @SerializedName("token_type") val tokenType: String,
+    @SerializedName("expires_in") val expiresIn: Long
 )
 
-data class SearchRequest(
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("query") val query: String,
-    @SerializedName("data_types") val dataTypes: List<String>? = null,
-    @SerializedName("start_date") val startDate: String? = null,
-    @SerializedName("end_date") val endDate: String? = null,
-    @SerializedName("limit") val limit: Int = 10
+// --- IAM Authentication Models ---
+// Sign In Response
+data class SignInResponse(
+    @SerializedName("token") val token: String,
+    @SerializedName("user") val user: UserData
 )
 
-// API Response Models
-data class ApiResponse(
-    @SerializedName("job_id") val jobId: String,
-    @SerializedName("status") val status: String,
-    @SerializedName("message") val message: String,
-    @SerializedName("estimated_processing_time_seconds") val estimatedProcessingTime: Double? = null
+// Sign Up Response
+data class SignUpResponse(
+    @SerializedName("token") val token: String?,
+    @SerializedName("user") val user: UserData
 )
 
-data class ProcessingStatusResponse(
-    @SerializedName("job_id") val jobId: String,
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("status") val status: String,
-    @SerializedName("created_at") val createdAt: String,
-    @SerializedName("updated_at") val updatedAt: String,
-    @SerializedName("progress") val progress: Double,
-    @SerializedName("records_total") val recordsTotal: Int,
-    @SerializedName("records_processed") val recordsProcessed: Int,
-    @SerializedName("current_stage") val currentStage: String?,
-    @SerializedName("error_message") val errorMessage: String?
+// User Data
+data class UserData(
+    @SerializedName("id") val id: String,
+    @SerializedName("email") val email: String,
+    @SerializedName("name") val name: String?,
+    @SerializedName("image") val image: String?,
+    @SerializedName("emailVerified") val emailVerified: Boolean,
+    @SerializedName("createdAt") val createdAt: String,
+    @SerializedName("updatedAt") val updatedAt: String
 )
 
-data class ProcessingResultResponse(
-    @SerializedName("job_id") val jobId: String,
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("status") val status: String,
-    @SerializedName("total_records") val totalRecords: Int,
-    @SerializedName("processed_records") val processedRecords: Int,
-    @SerializedName("failed_records") val failedRecords: Int,
-    @SerializedName("embeddings_created") val embeddingsCreated: Int,
-    @SerializedName("storage_size_mb") val storageSizeMb: Double,
-    @SerializedName("processing_time_seconds") val processingTimeSeconds: Double
+// Session Response
+data class SessionResponse(
+    @SerializedName("session") val session: SessionData?,
+    @SerializedName("user") val user: UserData?
 )
 
-data class SearchResult(
-    @SerializedName("record_id") val recordId: String,
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("data_type") val dataType: String,
-    @SerializedName("original_data") val originalData: Map<String, Any>,
-    @SerializedName("ai_text") val aiText: String,
-    @SerializedName("similarity_score") val similarityScore: Double,
-    @SerializedName("timestamp") val timestamp: String
+data class SessionData(
+    @SerializedName("id") val id: String,
+    @SerializedName("token") val token: String,
+    @SerializedName("userId") val userId: String,
+    @SerializedName("expiresAt") val expiresAt: String
 )
 
-data class SearchResponse(
-    @SerializedName("query") val query: String,
-    @SerializedName("total_results") val totalResults: Int,
-    @SerializedName("results") val results: List<SearchResult>,
-    @SerializedName("processing_time_ms") val processingTimeMs: Double
+// Sign In/Up Request
+data class SignInRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("password") val password: String,
+    @SerializedName("rememberMe") val rememberMe: Boolean = true
 )
 
-data class HealthSummaryResponse(
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("total_records") val totalRecords: Int,
-    @SerializedName("records_by_type") val recordsByType: Map<String, Int>,
-    @SerializedName("last_updated") val lastUpdated: String
+data class SignUpRequest(
+    @SerializedName("email") val email: String,
+    @SerializedName("password") val password: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("rememberMe") val rememberMe: Boolean = true
+)
+
+// JWT Token Response (Step 2 of 2-step auth)
+data class JWTTokenResponse(
+    @SerializedName("token") val jwtToken: String
+)
+
+// ==================== FHIR DATA MODELS ====================
+
+// Vitals Request (POST /api/v1/vitals/)
+// Includes ALL fields collected from Health Connect
+data class VitalsRequest(
+    // Core Activity Metrics
+    @SerializedName("steps") val steps: Int? = null,
+    @SerializedName("calories_kcal") val caloriesKcal: Double? = null,
+    @SerializedName("distance_meters") val distanceMeters: Double? = null,
+    @SerializedName("total_active_minutes") val totalActiveMinutes: Int? = null,
+    
+    // Exercise Data
+    @SerializedName("activity_name") val activityName: String? = null,
+    @SerializedName("exercise_duration_minutes") val exerciseDurationMinutes: Double? = null,
+    @SerializedName("active_zone_minutes") val activeZoneMinutes: Int? = null,
+    @SerializedName("fatburn_active_zone_minutes") val fatburnActiveZoneMinutes: Int? = null,
+    @SerializedName("cardio_active_zone_minutes") val cardioActiveZoneMinutes: Int? = null,
+    @SerializedName("peak_active_zone_minutes") val peakActiveZoneMinutes: Int? = null,
+    
+    // Vitals
+    @SerializedName("resting_heart_rate") val restingHeartRate: Int? = null,
+    @SerializedName("heart_rate") val heartRate: Int? = null,
+    @SerializedName("heart_rate_variability") val heartRateVariability: Double? = null,
+    @SerializedName("stress_management_score") val stressManagementScore: Int? = null,
+    @SerializedName("blood_pressure_systolic") val bloodPressureSystolic: Int? = null,
+    @SerializedName("blood_pressure_diastolic") val bloodPressureDiastolic: Int? = null,
+    
+    // Sleep Data
+    @SerializedName("sleep_minutes") val sleepMinutes: Int? = null,
+    @SerializedName("rem_sleep_minutes") val remSleepMinutes: Int? = null,
+    @SerializedName("deep_sleep_minutes") val deepSleepMinutes: Int? = null,
+    @SerializedName("light_sleep_minutes") val lightSleepMinutes: Int? = null,
+    @SerializedName("awake_minutes") val awakeMinutes: Int? = null,
+    @SerializedName("bed_time") val bedTime: String? = null,
+    @SerializedName("wake_up_time") val wakeUpTime: String? = null,
+    @SerializedName("deep_sleep_percent") val deepSleepPercent: Double? = null,
+    @SerializedName("rem_sleep_percent") val remSleepPercent: Double? = null,
+    @SerializedName("light_sleep_percent") val lightSleepPercent: Double? = null,
+    @SerializedName("awake_percent") val awakePercent: Double? = null,
+    
+    // Biometrics
+    @SerializedName("weight_kg") val weightKg: Double? = null,
+    @SerializedName("height_cm") val heightCm: Double? = null,
+    @SerializedName("age") val age: Int? = null,
+    @SerializedName("gender") val gender: String? = null,
+    
+    // Metadata (server auto-sets date, don't send it)
+    @SerializedName("recorded_at") val recordedAt: String? = null
+)
+
+// Vitals Response (from GET/POST /api/v1/vitals/)
+data class VitalRecord(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("user_id") val userId: String? = null,
+    @SerializedName("heart_rate") val heartRate: Int? = null,
+    @SerializedName("blood_pressure_systolic") val bloodPressureSystolic: Int? = null,
+    @SerializedName("blood_pressure_diastolic") val bloodPressureDiastolic: Int? = null,
+    @SerializedName("steps") val steps: Int? = null,
+    @SerializedName("calories") val calories: Double? = null,
+    @SerializedName("sleep_minutes") val sleepMinutes: Int? = null,
+    @SerializedName("recorded_at") val recordedAt: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null
+)
+
+// Patient Profile (GET /api/fhir/v1/patients/me)
+data class PatientRecord(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("resourceType") val resourceType: String? = null,
+    @SerializedName("name") val name: List<PatientName>? = null,
+    @SerializedName("gender") val gender: String? = null,
+    @SerializedName("birthDate") val birthDate: String? = null
+)
+
+data class PatientName(
+    @SerializedName("use") val use: String? = null,
+    @SerializedName("family") val family: String? = null,
+    @SerializedName("given") val given: List<String>? = null
 )
 
 // API Service Interface
 interface HealthApiService {
     
-    // NEW: Queue-based endpoints (PRIMARY)
+    // ==================== IAM AUTHENTICATION ====================
+    
+    // 🔐 Sign In with Email/Password
+    @Headers("Content-Type: application/json")
+    @POST("https://iam.drgodly.com/api/auth/sign-in/email")
+    suspend fun signInWithEmail(
+        @Body request: SignInRequest
+    ): Response<SignInResponse>
+    
+    // 🔐 Sign Up with Email/Password
+    @Headers("Content-Type: application/json")
+    @POST("https://iam.drgodly.com/api/auth/sign-up/email")
+    suspend fun signUpWithEmail(
+        @Body request: SignUpRequest
+    ): Response<SignUpResponse>
+    
+    // 🔐 Get Current Session (validate token)
+    @GET("https://iam.drgodly.com/api/auth/get-session")
+    suspend fun getSession(
+        @Header("Authorization") authorization: String
+    ): Response<SessionResponse>
+    
+    // 🔐 Sign Out
+    @Headers("Content-Type: application/json")
+    @POST("https://iam.drgodly.com/api/auth/sign-out")
+    suspend fun signOut(
+        @Header("Authorization") authorization: String? = null
+    ): Response<Map<String, Boolean>>
+    
+    // 🔐 Exchange Short Token for JWT Token (for FHIR access)
+    // MUST use full URL to call IAM server, not FHIR server
+    @GET("https://iam.drgodly.com/api/auth/token")
+    suspend fun exchangeForJWT(
+        @Header("Authorization") authorization: String
+    ): Response<JWTTokenResponse>
+    
+    // ==================== FHIR HEALTH DATA API ====================
+    
+    // � GET my vitals (current user)
+    @GET("api/v1/vitals/me")
+    suspend fun getMyVitals(): Response<List<VitalRecord>>
+    
+    // 🔥 POST new vitals
+    @Headers("Content-Type: application/json")
+    @POST("api/v1/vitals/")
+    suspend fun createVitals(
+        @Body request: VitalsRequest
+    ): Response<VitalRecord>
+    
+    // 🔥 GET my patient profile
+    @GET("api/fhir/v1/patients/me")
+    suspend fun getMyPatientProfile(): Response<PatientRecord>
+    
+    // ==================== LEGACY (Deprecated) ====================
+    
+    // 🚀 DEPRECATED: Use FHIR endpoints above instead
+    @Deprecated("Use createVitals() instead")
     @POST("api/health/queue")
     suspend fun queueHealthData(
         @Body request: HealthQueueRequest
     ): Response<HealthQueueResponse>
     
+    @Deprecated("Not needed with FHIR")
     @GET("api/health/status/{queueId}")
     suspend fun getQueueStatus(
         @Path("queueId") queueId: String
     ): Response<QueueStatusResponse>
     
-    // Legacy endpoints (keep for backward compatibility)
-    @POST("api/health/data")
-    suspend fun sendHealthData(@Body request: HealthDataRequest): Response<ApiResponse>
-    
-    @GET("api/health/status/{jobId}")
-    suspend fun getProcessingStatus(@Path("jobId") jobId: String): Response<ProcessingStatusResponse>
-    
-    @GET("api/health/results/{jobId}")
-    suspend fun getProcessingResults(@Path("jobId") jobId: String): Response<ProcessingResultResponse>
-    
-    @POST("api/health/search")
-    suspend fun searchHealthData(@Body request: SearchRequest): Response<SearchResponse>
-    
-    @GET("api/health/summary/{userId}")
-    suspend fun getHealthSummary(
-        @Path("userId") userId: String,
-        @Query("start_date") startDate: String? = null,
-        @Query("end_date") endDate: String? = null
-    ): Response<HealthSummaryResponse>
-    
+    // Health check endpoint
     @GET("health")
     suspend fun healthCheck(): Response<Map<String, Any>>
+    
+    // ==================== OAUTH2 (Legacy/Fallback) ====================
+    
+    @Deprecated("Use sign-in/email instead")
+    @FormUrlEncoded
+    @POST("oauth2/token")
+    suspend fun exchangeCodeForToken(
+        @Field("grant_type") grantType: String = "authorization_code",
+        @Field("code") code: String,
+        @Field("redirect_uri") redirectUri: String = "phia://auth/callback",
+        @Field("client_id") clientId: String = "phia-mobile-app",
+        @Field("code_verifier") codeVerifier: String?
+    ): Response<TokenResponse>
 }

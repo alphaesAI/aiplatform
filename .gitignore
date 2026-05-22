@@ -77,3 +77,6 @@ logs/
 # Embedded git repositories (submodules)
 android-app/
 api-framework/
+
+.gemini/
+gha-creds-*.json

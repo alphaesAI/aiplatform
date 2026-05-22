@@ -2,33 +2,66 @@ package com.healthpipeline.data
 
 import android.content.Context
 import android.util.Log
+import com.healthpipeline.config.ApiConfig
+import com.healthpipeline.utils.AuthInterceptor
+import com.healthpipeline.utils.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.CookieJar
+import okhttp3.Cookie
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
+/**
+ * Simple in-memory cookie jar to persist session cookies
+ * Essential for IAM server authentication flow
+ */
+class SessionCookieJar : CookieJar {
+    private val cookies = mutableListOf<Cookie>()
+    
+    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+        this.cookies.removeAll { existing ->
+            cookies.any { new -> new.name == existing.name && new.domain == existing.domain }
+        }
+        this.cookies.addAll(cookies)
+        Log.d("SessionCookieJar", "🍪 Saved ${cookies.size} cookies for ${url.host}")
+    }
+    
+    override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        val matchingCookies = cookies.filter { it.matches(url) }
+        Log.d("SessionCookieJar", "🍪 Loaded ${matchingCookies.size} cookies for ${url.host}")
+        return matchingCookies
+    }
+}
+
 class ApiClient(private val context: Context) {
     
     companion object {
         private const val TAG = "ApiClient"
-        // Physical device - use computer's IP address
-        private const val BASE_URL = "http://192.168.31.175:8000/"
     }
+
+    private val sessionManager = SessionManager(context)
+    
+    // Shared cookie jar for all requests (maintains session across IAM and FHIR)
+    private val cookieJar = SessionCookieJar()
     
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .cookieJar(cookieJar)
+        .connectTimeout(ApiConfig.CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(ApiConfig.READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(ApiConfig.WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .addInterceptor(AuthInterceptor(sessionManager))
         .addInterceptor(HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BODY
         })
         .build()
     
     private val retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
+        .baseUrl(ApiConfig.HEALTH_API_BASE_URL)
         .client(httpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()

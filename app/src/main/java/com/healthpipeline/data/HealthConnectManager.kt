@@ -23,471 +23,322 @@ class HealthConnectManager(private val context: Context) {
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(DistanceRecord::class),
         HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
-        HealthPermission.getReadPermission(ExerciseSessionRecord::class)
+        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        HealthPermission.getReadPermission(SpeedRecord::class),
+        HealthPermission.getReadPermission(ElevationGainedRecord::class),
+        HealthPermission.getReadPermission(WeightRecord::class),
+        HealthPermission.getReadPermission(HeightRecord::class),
+        HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
+        HealthPermission.getReadPermission(RestingHeartRateRecord::class)
     )
 
     suspend fun checkPermissions(): Pair<String, Boolean> {
         return try {
             val grantedPermissions = healthConnectClient.permissionController.getGrantedPermissions()
             val hasAllPermissions = permissions.all { it in grantedPermissions }
-            
-            if (hasAllPermissions) {
-                "All permissions granted" to true
-            } else {
-                "Permissions needed" to false
-            }
+            if (hasAllPermissions) "All permissions granted" to true else "Permissions needed" to false
         } catch (e: Exception) {
             "Error: ${e.message}" to false
         }
     }
     
-    // Read health data from Health Connect
     suspend fun readHealthData(): HealthData {
         return try {
             val steps = readTodaySteps()
-            Log.d("HealthData", "Steps extracted: $steps")
-            val heartRate = readTodayHeartRate()
-            Log.d("HealthData", "HeartRate extracted: $heartRate")
-            val sleep = readLastNightSleep()
+            var calories = readTodayCalories()
             val distance = readTodayDistance()
-            Log.d("HealthData", "Distance extracted: $distance")
-            val calories = readTodayCalories()
-            Log.d("HealthData", "Calories extracted: $calories")
-            val (exerciseSessions, activeMinutes, lastExercise) = readTodayExercise()
-            val heartRateZones = readHeartRateZones()
-            val sleepAnalysis = readSleepAnalysis()
+            val exerciseList = readTodayExercise() 
+        
+            var totalActiveMinutes = exerciseList.sumOf { it.activeZoneMinutes }
+        
+            val vitals = readVitals()
+            val sleepAnalysis = readDetailedSleepAnalysis()
+            val biometrics = readBiometrics()
             
-            // Estimate missing data from available data
-            val finalCalories = if (calories == 0 && steps > 0) {
-                (steps * 0.04).toInt() // Estimate: 0.04 cal per step
-            } else calories
+            // Calculate estimated calories if no data from Health Connect
+            if (calories == 0 && steps > 0) {
+                val weight = biometrics.weightKg ?: 70.0 // Default 70kg if no weight data
+                // Formula: steps * weight * 0.0005 (approx 0.04 kcal per step for average person)
+                val estimatedCalories = (steps * weight * 0.0005).toInt()
+                calories = estimatedCalories
+                Log.d("HealthConnect", "📊 Estimated calories: $calories kcal (from $steps steps, ${weight}kg)")
+            }
             
-            val finalActiveMinutes = if (activeMinutes == 0 && distance > 0) {
-                (distance * 12).toInt() // Estimate: 12 min per km
-            } else activeMinutes
-            
-            val finalHeartRate = if (heartRate == 0 && steps > 0) {
-                75 // Average resting HR
-            } else heartRate
-            
-            Log.d("HealthData", "Final values - Calories: $finalCalories, Active: $finalActiveMinutes, HR: $finalHeartRate")
-            
-            // Calculate health insights based on all data
-            val healthInsights = calculateHealthInsights(steps, heartRateZones, sleepAnalysis, exerciseSessions, finalActiveMinutes, finalCalories)
-            
-            HealthData(steps, finalHeartRate, sleep, distance, finalCalories, exerciseSessions, finalActiveMinutes, lastExercise, heartRateZones, sleepAnalysis, healthInsights)
+            // Estimate active minutes if no exercise data (approx 100 steps = 1 active minute)
+            if (totalActiveMinutes == 0 && steps > 0) {
+                totalActiveMinutes = steps / 100
+                Log.d("HealthConnect", "📊 Estimated active minutes: $totalActiveMinutes min (from $steps steps)")
+            }
+        
+            HealthData(
+                totalSteps = steps,
+                totalCaloriesBurned = calories,
+                totalDistanceKm = distance,
+                totalActiveMinutes = totalActiveMinutes,
+                biometrics = biometrics,
+                vitals = vitals,
+                sleepAnalysis = sleepAnalysis,
+                exerciseSessionsList = exerciseList
+            )
         } catch (e: Exception) {
-            HealthData() // Return empty data on error
+            Log.e("HealthConnect", "Error reading data", e)
+            HealthData()
         }
     }
     
     private suspend fun readTodaySteps(): Int {
         return try {
-            val today = LocalDateTime.now().atZone(ZoneId.systemDefault())
-            val startOfDay = today.toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val endOfDay = today.toInstant()
-            
-            val request = ReadRecordsRequest(
-                recordType = StepsRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startOfDay, endOfDay)
-            )
-            
-            val response = healthConnectClient.readRecords(request)
-            response.records.sumOf { it.count.toInt() }
-        } catch (e: Exception) {
-            0
-        }
-    }
-    
-    private suspend fun readTodayHeartRate(): Int {
-        return try {
-            val today = LocalDateTime.now().atZone(ZoneId.systemDefault())
-            val startOfDay = today.toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val endOfDay = today.toInstant()
-            
-            val request = ReadRecordsRequest(
-                recordType = HeartRateRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startOfDay, endOfDay)
-            )
-            
-            val response = healthConnectClient.readRecords(request)
-            if (response.records.isNotEmpty()) {
-                val allSamples = response.records.flatMap { it.samples }
-                if (allSamples.isNotEmpty()) {
-                    allSamples.map { it.beatsPerMinute.toInt() }.average().toInt()
-                } else 0
-            } else 0
-        } catch (e: Exception) {
-            0
-        }
-    }
-    
-    private suspend fun readLastNightSleep(): Double {
-        return try {
+            val startOfDay = LocalDateTime.now().withHour(0).withMinute(0).atZone(ZoneId.systemDefault()).toInstant()
             val now = Instant.now()
-            val yesterday = now.minus(1, ChronoUnit.DAYS)
+            Log.d("HealthConnect", "📊 Reading steps from ${startOfDay} to ${now}")
             
-            val request = ReadRecordsRequest(
-                recordType = SleepSessionRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(yesterday, now)
-            )
+            val response = healthConnectClient.readRecords(ReadRecordsRequest(StepsRecord::class, TimeRangeFilter.between(startOfDay, now)))
             
-            val response = healthConnectClient.readRecords(request)
-            if (response.records.isNotEmpty()) {
-                val latestSleep = response.records.maxByOrNull { it.startTime }
-                latestSleep?.let {
-                    val durationMillis = it.endTime.toEpochMilli() - it.startTime.toEpochMilli()
-                    durationMillis / (1000.0 * 60 * 60) // Convert to hours
-                } ?: 0.0
-            } else 0.0
-        } catch (e: Exception) {
-            0.0
+            Log.d("HealthConnect", "📊 Found ${response.records.size} step records:")
+            response.records.forEachIndexed { index, record ->
+                val source = record.metadata.dataOrigin.packageName
+                Log.d("HealthConnect", "   Record $index: ${record.count} steps from $source (${record.startTime} to ${record.endTime})")
+            }
+            
+            // Filter to only Google Fit data
+            val googleFitRecords = response.records.filter { 
+                it.metadata.dataOrigin.packageName.contains("google.android.apps.fitness", ignoreCase = true) 
+            }
+            
+            val totalSteps = googleFitRecords.sumOf { it.count.toInt() }
+            Log.d("HealthConnect", "📊 Google Fit steps only: $totalSteps (filtered from ${response.records.size} total records)")
+            totalSteps
+        } catch (e: Exception) { 
+            Log.e("HealthConnect", "❌ Error reading steps", e)
+            0 
         }
     }
-    
+
     private suspend fun readTodayDistance(): Double {
         return try {
-            val today = LocalDateTime.now().atZone(ZoneId.systemDefault())
-            val startOfDay = today.toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val endOfDay = today.toInstant()
+            val startOfDay = LocalDateTime.now().withHour(0).withMinute(0).atZone(ZoneId.systemDefault()).toInstant()
+            val now = Instant.now()
             
-            val request = ReadRecordsRequest(
-                recordType = DistanceRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startOfDay, endOfDay)
-            )
+            val response = healthConnectClient.readRecords(ReadRecordsRequest(DistanceRecord::class, TimeRangeFilter.between(startOfDay, now)))
             
-            val response = healthConnectClient.readRecords(request)
-            val totalMeters = response.records.sumOf { it.distance.inMeters }
-            totalMeters / 1000.0 // Convert to kilometers
-        } catch (e: Exception) {
-            0.0
+            Log.d("HealthConnect", "📊 Found ${response.records.size} distance records:")
+            response.records.forEachIndexed { index, record ->
+                val source = record.metadata.dataOrigin.packageName
+                Log.d("HealthConnect", "   Record $index: ${record.distance.inMeters}m from $source (${record.startTime} to ${record.endTime})")
+            }
+            
+            // Filter to only Google Fit data
+            val googleFitRecords = response.records.filter { 
+                it.metadata.dataOrigin.packageName.contains("google.android.apps.fitness", ignoreCase = true) 
+            }
+            
+            val totalKm = googleFitRecords.sumOf { it.distance.inMeters } / 1000.0
+            Log.d("HealthConnect", "📊 Google Fit distance only: ${totalKm}km (filtered from ${response.records.size} total records)")
+            totalKm
+        } catch (e: Exception) { 
+            Log.e("HealthConnect", "❌ Error reading distance", e)
+            0.0 
         }
     }
-    
+
     private suspend fun readTodayCalories(): Int {
         return try {
-            val today = LocalDateTime.now().atZone(ZoneId.systemDefault())
-            val startOfDay = today.toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val endOfDay = today.toInstant()
+            val startOfDay = LocalDateTime.now().withHour(0).withMinute(0).atZone(ZoneId.systemDefault()).toInstant()
+            val response = healthConnectClient.readRecords(ReadRecordsRequest(ActiveCaloriesBurnedRecord::class, TimeRangeFilter.between(startOfDay, Instant.now())))
             
-            val request = ReadRecordsRequest(
-                recordType = ActiveCaloriesBurnedRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startOfDay, endOfDay)
-            )
-            
-            val response = healthConnectClient.readRecords(request)
-            response.records.sumOf { it.energy.inCalories }.toInt()
-        } catch (e: Exception) {
-            0
-        }
-    }
-    
-    private suspend fun readTodayExercise(): Triple<Int, Int, String> {
-        return try {
-            val today = LocalDateTime.now().atZone(ZoneId.systemDefault())
-            val startOfDay = today.toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val endOfDay = today.toInstant()
-            
-            val request = ReadRecordsRequest(
-                recordType = ExerciseSessionRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startOfDay, endOfDay)
-            )
-            
-            val response = healthConnectClient.readRecords(request)
-            val sessions = response.records
-            
-            val sessionCount = sessions.size
-            val totalActiveMinutes = sessions.sumOf { 
-                val durationMillis = it.endTime.toEpochMilli() - it.startTime.toEpochMilli()
-                (durationMillis / (1000 * 60)).toInt() // Convert to minutes
-            }
-            val lastExerciseType = sessions.lastOrNull()?.exerciseType?.toString() ?: "None"
-            
-            Triple(sessionCount, totalActiveMinutes, lastExerciseType)
-        } catch (e: Exception) {
-            Triple(0, 0, "None")
-        }
-    }
-    
-    private suspend fun readHeartRateZones(): HeartRateZones {
-        return try {
-            val today = LocalDateTime.now().atZone(ZoneId.systemDefault())
-            val startOfDay = today.toLocalDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
-            val endOfDay = today.toInstant()
-            
-            val request = ReadRecordsRequest(
-                recordType = HeartRateRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startOfDay, endOfDay)
-            )
-            
-            val response = healthConnectClient.readRecords(request)
-            val allSamples = response.records.flatMap { it.samples }
-            
-            if (allSamples.isEmpty()) {
-                return HeartRateZones()
+            Log.d("HealthConnect", "📊 Found ${response.records.size} calorie records")
+            response.records.forEachIndexed { index, record ->
+                val source = record.metadata.dataOrigin.packageName
+                Log.d("HealthConnect", "   Record $index: ${record.energy.inCalories} kcal from $source")
             }
             
-            val heartRates = allSamples.map { it.beatsPerMinute.toInt() }
-            val minHR = heartRates.minOrNull() ?: 0
-            val maxHR = heartRates.maxOrNull() ?: 0
-            val avgHR = heartRates.average().toInt()
+            val totalCalories = response.records.sumOf { it.energy.inCalories }.toInt()
+            Log.d("HealthConnect", "📊 Total calories: $totalCalories kcal")
+            totalCalories
+        } catch (e: Exception) { 
+            Log.e("HealthConnect", "❌ Error reading calories", e)
+            0 
+        }
+    }
+
+    private suspend fun readTodayExercise(): List<ExerciseSessionDetails> {
+        return try {
+            val startOfDay = LocalDateTime.now().withHour(0).withMinute(0).atZone(ZoneId.systemDefault()).toInstant()
+            val response = healthConnectClient.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, TimeRangeFilter.between(startOfDay, Instant.now())))
             
-            // Calculate estimated max heart rate (220 - age, using 30 as default)
-            val estimatedMaxHR = 190 // Assuming age ~30, can be made dynamic
+            Log.d("HealthConnect", "📊 Found ${response.records.size} exercise sessions")
+            response.records.forEachIndexed { index, record ->
+                val durationMins = ((record.endTime.toEpochMilli() - record.startTime.toEpochMilli()) / 60000).toLong()
+                Log.d("HealthConnect", "   Exercise $index: ${record.exerciseType}, ${durationMins}min from ${record.metadata.dataOrigin.packageName}")
+            }
             
-            // Define heart rate zones based on percentage of max HR
-            val restingZone = 50..60
-            val fatBurnZone = (estimatedMaxHR * 0.6).toInt()..(estimatedMaxHR * 0.7).toInt()
-            val cardioZone = (estimatedMaxHR * 0.7).toInt()..(estimatedMaxHR * 0.85).toInt()
-            val peakZone = (estimatedMaxHR * 0.85).toInt()..estimatedMaxHR
+            response.records.map { record ->
+                val durationMins = ((record.endTime.toEpochMilli() - record.startTime.toEpochMilli()) / 60000).toLong()
+                ExerciseSessionDetails(
+                    activityName = record.exerciseType.toString(),
+                    startTime = record.startTime.atZone(ZoneId.systemDefault()).toLocalTime().toString(),
+                    endTime = record.endTime.atZone(ZoneId.systemDefault()).toLocalTime().toString(),
+                    duration = durationMins,
+                    activeZoneMinutes = durationMins.toInt(), // Fallback estimation
+                    fatburnActiveZoneMinutes = (durationMins * 0.5).toInt(),
+                    cardioActiveZoneMinutes = (durationMins * 0.3).toInt(),
+                    peakActiveZoneMinutes = (durationMins * 0.2).toInt()
+                )
+            }
+        } catch (e: Exception) { 
+            Log.e("HealthConnect", "❌ Error reading exercise sessions", e)
+            emptyList() 
+        }
+    }
+
+    private suspend fun readVitals(): Vitals {
+        return try {
+            val startOfDay = LocalDateTime.now().withHour(0).withMinute(0).atZone(ZoneId.systemDefault()).toInstant()
             
-            // Count minutes in each zone (approximate based on samples)
-            val samplesPerMinute = if (allSamples.size > 0) allSamples.size / 60.0 else 1.0
-            val minutesPerSample = 1.0 / samplesPerMinute
+            // RHR
+            var rhr: Int? = null
+            var rhrSource = "none"
+            try {
+                val rhrResponse = healthConnectClient.readRecords(ReadRecordsRequest(RestingHeartRateRecord::class, TimeRangeFilter.between(startOfDay.minus(7, ChronoUnit.DAYS), Instant.now())))
+                Log.d("HealthConnect", "📊 Found ${rhrResponse.records.size} RHR records")
+                rhrResponse.records.lastOrNull()?.let {
+                    rhr = it.beatsPerMinute.toInt()
+                    rhrSource = it.metadata.dataOrigin.packageName
+                    Log.d("HealthConnect", "   RHR: ${rhr} bpm from ${rhrSource}")
+                }
+            } catch(e: Exception){
+                Log.e("HealthConnect", "❌ Error reading RHR", e)
+            }
             
-            var restingMinutes = 0
-            var fatBurnMinutes = 0
-            var cardioMinutes = 0
-            var peakMinutes = 0
+            // HRV
+            var hrv: Double? = null
+            var hrvSource = "none"
+            try {
+                val hrvResponse = healthConnectClient.readRecords(ReadRecordsRequest(HeartRateVariabilityRmssdRecord::class, TimeRangeFilter.between(startOfDay.minus(7, ChronoUnit.DAYS), Instant.now())))
+                Log.d("HealthConnect", "📊 Found ${hrvResponse.records.size} HRV records")
+                hrvResponse.records.lastOrNull()?.let {
+                    hrv = it.heartRateVariabilityMillis
+                    hrvSource = it.metadata.dataOrigin.packageName
+                    Log.d("HealthConnect", "   HRV: ${hrv} ms from ${hrvSource}")
+                }
+            } catch(e: Exception){
+                Log.e("HealthConnect", "❌ Error reading HRV", e)
+            }
+
+            Log.d("HealthConnect", "📊 Vitals - RHR: ${rhr} bpm (${rhrSource}), HRV: ${hrv} ms (${hrvSource})")
+            Vitals(
+                restingHeartRate = rhr,
+                heartRateVariability = hrv,
+                stressManagementScore = null
+            )
+        } catch (e: Exception) { 
+            Log.e("HealthConnect", "❌ Error reading vitals", e)
+            Vitals(
+                restingHeartRate = null,
+                heartRateVariability = null,
+                stressManagementScore = null
+            ) 
+        }
+    }
+
+    private suspend fun readDetailedSleepAnalysis(): DetailedSleepAnalysis {
+        try {
+            val startTime = Instant.now().minus(24, ChronoUnit.HOURS)
+            val response = healthConnectClient.readRecords(ReadRecordsRequest(SleepSessionRecord::class, TimeRangeFilter.between(startTime, Instant.now())))
             
-            heartRates.forEach { hr ->
-                val minutes = minutesPerSample.toInt().coerceAtLeast(1)
-                when {
-                    hr in restingZone -> restingMinutes += minutes
-                    hr in fatBurnZone -> fatBurnMinutes += minutes
-                    hr in cardioZone -> cardioMinutes += minutes
-                    hr in peakZone -> peakMinutes += minutes
+            Log.d("HealthConnect", "📊 Found ${response.records.size} sleep sessions")
+            
+            val latestSession = response.records.lastOrNull() 
+            if (latestSession == null) {
+                Log.d("HealthConnect", "📊 No sleep sessions found")
+                return DetailedSleepAnalysis()
+            }
+            
+            Log.d("HealthConnect", "📊 Latest sleep session: ${latestSession.startTime} to ${latestSession.endTime}, stages: ${latestSession.stages.size}")
+            
+            var awake = 0
+            var rem = 0
+            var light = 0
+            var deep = 0
+            
+            latestSession.stages.forEach { stage ->
+                val duration = ((stage.endTime.toEpochMilli() - stage.startTime.toEpochMilli()) / 60000).toInt()
+                when(stage.stage) {
+                    SleepSessionRecord.STAGE_TYPE_AWAKE -> awake += duration
+                    SleepSessionRecord.STAGE_TYPE_REM -> rem += duration
+                    SleepSessionRecord.STAGE_TYPE_LIGHT -> light += duration
+                    SleepSessionRecord.STAGE_TYPE_DEEP -> deep += duration
+                    else -> light += duration
                 }
             }
             
-            HeartRateZones(
-                restingMinutes = restingMinutes,
-                fatBurnMinutes = fatBurnMinutes,
-                cardioMinutes = cardioMinutes,
-                peakMinutes = peakMinutes,
-                restingHR = minHR,
-                maxHR = maxHR,
-                averageHR = avgHR
+            val totalMins = awake + rem + light + deep
+            Log.d("HealthConnect", "📊 Sleep breakdown - Total: ${totalMins}min, Awake: ${awake}min, REM: ${rem}min, Light: ${light}min, Deep: ${deep}min")
+            
+            if (totalMins == 0) {
+                Log.d("HealthConnect", "📊 No sleep stages data")
+                return DetailedSleepAnalysis()
+            }
+            
+            return DetailedSleepAnalysis(
+                bedTime = latestSession.startTime.atZone(ZoneId.systemDefault()).toLocalTime().toString(),
+                wakeUpTime = latestSession.endTime.atZone(ZoneId.systemDefault()).toLocalTime().toString(),
+                sleepMinutes = totalMins - awake,
+                awakeMinutes = awake,
+                remSleepMinutes = rem,
+                lightSleepMinutes = light,
+                deepSleepMinutes = deep,
+                awakePercent = (awake.toDouble() / totalMins) * 100,
+                remSleepPercent = (rem.toDouble() / totalMins) * 100,
+                lightSleepPercent = (light.toDouble() / totalMins) * 100,
+                deepSleepPercent = (deep.toDouble() / totalMins) * 100
             )
-        } catch (e: Exception) {
-            HeartRateZones()
-        }
+        } catch (e: Exception) { return DetailedSleepAnalysis() }
     }
     
-    private suspend fun readSleepAnalysis(): SleepAnalysis {
+    private suspend fun readBiometrics(): UserBiometrics {
         return try {
-            val now = Instant.now()
-            val yesterday = now.minus(1, ChronoUnit.DAYS)
+            val startTime = Instant.now().minus(365, ChronoUnit.DAYS)
             
-            val request = ReadRecordsRequest(
-                recordType = SleepSessionRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(yesterday, now)
-            )
-            
-            val response = healthConnectClient.readRecords(request)
-            if (response.records.isEmpty()) {
-                return SleepAnalysis()
-            }
-            
-            val latestSleep = response.records.maxByOrNull { it.startTime }
-            if (latestSleep == null) {
-                return SleepAnalysis()
-            }
-            
-            // Calculate total sleep duration
-            val durationMillis = latestSleep.endTime.toEpochMilli() - latestSleep.startTime.toEpochMilli()
-            val totalSleepHours = durationMillis / (1000.0 * 60 * 60)
-            
-            // Format bed time and wake time
-            val bedTime = java.time.format.DateTimeFormatter.ofPattern("h:mm a")
-                .format(latestSleep.startTime.atZone(ZoneId.systemDefault()))
-            val wakeTime = java.time.format.DateTimeFormatter.ofPattern("h:mm a")
-                .format(latestSleep.endTime.atZone(ZoneId.systemDefault()))
-            
-            // Analyze sleep stages (if available)
-            val stages = latestSleep.stages
-            var deepSleepMinutes = 0
-            var lightSleepMinutes = 0
-            var remSleepMinutes = 0
-            var awakeMinutes = 0
-            
-            stages.forEach { stage ->
-                val stageDurationMinutes = (stage.endTime.toEpochMilli() - stage.startTime.toEpochMilli()) / (1000 * 60)
-                when (stage.stage) {
-                    SleepSessionRecord.STAGE_TYPE_DEEP -> deepSleepMinutes += stageDurationMinutes.toInt()
-                    SleepSessionRecord.STAGE_TYPE_LIGHT -> lightSleepMinutes += stageDurationMinutes.toInt()
-                    SleepSessionRecord.STAGE_TYPE_REM -> remSleepMinutes += stageDurationMinutes.toInt()
-                    SleepSessionRecord.STAGE_TYPE_AWAKE -> awakeMinutes += stageDurationMinutes.toInt()
-                    else -> lightSleepMinutes += stageDurationMinutes.toInt() // Default to light sleep
+            var weight: Double? = null
+            var weightSource: String = "none"
+            try {
+                val weightResponse = healthConnectClient.readRecords(ReadRecordsRequest(WeightRecord::class, TimeRangeFilter.between(startTime, Instant.now())))
+                Log.d("HealthConnect", "📊 Found ${weightResponse.records.size} weight records")
+                weightResponse.records.lastOrNull()?.let { 
+                    weight = it.weight.inKilograms
+                    weightSource = it.metadata.dataOrigin.packageName
+                    Log.d("HealthConnect", "   Weight: ${weight}kg from $weightSource")
                 }
+            } catch(e: Exception){
+                Log.e("HealthConnect", "❌ Error reading weight", e)
             }
             
-            // If no stages data, estimate based on typical sleep patterns
-            if (deepSleepMinutes == 0 && lightSleepMinutes == 0 && remSleepMinutes == 0) {
-                val totalMinutes = totalSleepHours * 60
-                deepSleepMinutes = (totalMinutes * 0.20).toInt() // 20% deep sleep
-                lightSleepMinutes = (totalMinutes * 0.55).toInt() // 55% light sleep
-                remSleepMinutes = (totalMinutes * 0.20).toInt() // 20% REM sleep
-                awakeMinutes = (totalMinutes * 0.05).toInt() // 5% awake
-            }
-            
-            // Calculate sleep efficiency (time asleep vs time in bed)
-            val timeAsleep = deepSleepMinutes + lightSleepMinutes + remSleepMinutes
-            val timeInBed = timeAsleep + awakeMinutes
-            val sleepEfficiency = if (timeInBed > 0) ((timeAsleep.toDouble() / timeInBed) * 100).toInt() else 0
-            
-            // Calculate sleep quality score (0-100)
-            val sleepQualityScore = calculateSleepQuality(totalSleepHours, deepSleepMinutes, sleepEfficiency, awakeMinutes)
-            
-            SleepAnalysis(
-                totalSleepHours = totalSleepHours,
-                deepSleepMinutes = deepSleepMinutes,
-                lightSleepMinutes = lightSleepMinutes,
-                remSleepMinutes = remSleepMinutes,
-                awakeMinutes = awakeMinutes,
-                sleepEfficiency = sleepEfficiency,
-                sleepQualityScore = sleepQualityScore,
-                bedTime = bedTime,
-                wakeTime = wakeTime
-            )
-        } catch (e: Exception) {
-            SleepAnalysis()
-        }
-    }
-    
-    private fun calculateSleepQuality(totalHours: Double, deepMinutes: Int, efficiency: Int, awakeMinutes: Int): Int {
-        var score = 50 // Base score
-        
-        // Duration score (7-9 hours is optimal)
-        when {
-            totalHours in 7.0..9.0 -> score += 25
-            totalHours in 6.0..7.0 || totalHours in 9.0..10.0 -> score += 15
-            totalHours in 5.0..6.0 || totalHours in 10.0..11.0 -> score += 5
-            else -> score -= 10
-        }
-        
-        // Deep sleep score (15-20% is good)
-        val deepPercentage = if (totalHours > 0) (deepMinutes / (totalHours * 60)) * 100 else 0.0
-        when {
-            deepPercentage >= 15 -> score += 15
-            deepPercentage >= 10 -> score += 10
-            deepPercentage >= 5 -> score += 5
-            else -> score -= 5
-        }
-        
-        // Efficiency score
-        when {
-            efficiency >= 90 -> score += 10
-            efficiency >= 80 -> score += 5
-            efficiency >= 70 -> score += 2
-            else -> score -= 5
-        }
-        
-        return score.coerceIn(0, 100)
-    }
-    
-    private fun calculateHealthInsights(
-        steps: Int,
-        heartRateZones: HeartRateZones,
-        sleepAnalysis: SleepAnalysis,
-        exerciseSessions: Int,
-        activeMinutes: Int,
-        calories: Int
-    ): HealthInsights {
-        var overallScore = 0
-        val recommendations = mutableListOf<String>()
-        val achievements = mutableListOf<String>()
-        
-        // Steps analysis (25 points max)
-        val stepsScore = when {
-            steps >= 10000 -> {
-                achievements.add("🎯 Daily step goal achieved!")
-                25
-            }
-            steps >= 7500 -> 20
-            steps >= 5000 -> 15
-            steps >= 2500 -> 10
-            else -> {
-                recommendations.add("Try to walk more - aim for 10,000 steps daily")
-                5
-            }
-        }
-        overallScore += stepsScore
-        
-        // Sleep analysis (25 points max)
-        val sleepScore = if (sleepAnalysis.sleepQualityScore > 0) {
-            (sleepAnalysis.sleepQualityScore * 0.25).toInt()
-        } else {
-            recommendations.add("Track your sleep for better health insights")
-            10
-        }
-        overallScore += sleepScore
-        
-        // Exercise analysis (25 points max)
-        val exerciseScore = when {
-            activeMinutes >= 150 -> {
-                achievements.add("💪 Weekly exercise goal on track!")
-                25
-            }
-            activeMinutes >= 75 -> 20
-            activeMinutes >= 30 -> 15
-            exerciseSessions > 0 -> 10
-            else -> {
-                recommendations.add("Add 30 minutes of exercise to your day")
-                5
-            }
-        }
-        overallScore += exerciseScore
-        
-        // Heart rate analysis (25 points max)
-        val heartRateScore = if (heartRateZones.averageHR > 0) {
-            val totalActiveZones = heartRateZones.fatBurnMinutes + heartRateZones.cardioMinutes + heartRateZones.peakMinutes
-            when {
-                totalActiveZones >= 30 -> {
-                    achievements.add("❤️ Great cardiovascular activity!")
-                    25
+            var height: Double? = null
+            var heightSource: String = "none"
+            try {
+                val heightResponse = healthConnectClient.readRecords(ReadRecordsRequest(HeightRecord::class, TimeRangeFilter.between(startTime, Instant.now())))
+                Log.d("HealthConnect", "📊 Found ${heightResponse.records.size} height records")
+                heightResponse.records.lastOrNull()?.let { 
+                    height = it.height.inMeters?.times(100)
+                    heightSource = it.metadata.dataOrigin.packageName
+                    Log.d("HealthConnect", "   Height: ${height}cm from $heightSource")
                 }
-                totalActiveZones >= 15 -> 20
-                totalActiveZones >= 5 -> 15
-                else -> 10
+            } catch(e: Exception){
+                Log.e("HealthConnect", "❌ Error reading height", e)
             }
-        } else {
-            recommendations.add("Consider heart rate monitoring during workouts")
-            10
+            
+            Log.d("HealthConnect", "📊 Biometrics - Weight: ${weight}kg (${weightSource}), Height: ${height}cm (${heightSource})")
+            
+            UserBiometrics(
+                age = null,
+                gender = null,
+                weightKg = weight,
+                heightCm = height
+            )
+        } catch (e: Exception) { 
+            Log.e("HealthConnect", "❌ Error reading biometrics", e)
+            UserBiometrics() 
         }
-        overallScore += heartRateScore
-        
-        // Determine activity level
-        val activityLevel = when {
-            overallScore >= 85 -> "Excellent"
-            overallScore >= 70 -> "Very Good"
-            overallScore >= 55 -> "Good"
-            overallScore >= 40 -> "Fair"
-            else -> "Needs Improvement"
-        }
-        
-        // Fitness goal progress (based on steps + exercise)
-        val fitnessGoalProgress = ((stepsScore + exerciseScore) * 2).coerceIn(0, 100)
-        
-        // Health trend (simplified)
-        val healthTrend = when {
-            overallScore >= 70 -> "Improving"
-            overallScore >= 50 -> "Stable"
-            else -> "Needs Attention"
-        }
-        
-        // Add positive reinforcement
-        if (achievements.isEmpty()) {
-            achievements.add("Keep up the good work!")
-        }
-        
-        return HealthInsights(
-            overallHealthScore = overallScore,
-            activityLevel = activityLevel,
-            fitnessGoalProgress = fitnessGoalProgress,
-            healthTrend = healthTrend,
-            recommendations = recommendations.take(3), // Limit to 3 recommendations
-            achievements = achievements.take(2) // Limit to 2 achievements
-        )
     }
 }
