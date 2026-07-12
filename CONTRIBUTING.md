@@ -10,8 +10,20 @@ Before you begin, make sure you have the following installed on your system:
 
 - **Python 3.8 or higher**: Download from [python.org](https://www.python.org/downloads/)
 - **Git**: Download from [git-scm.com](https://git-scm.com/)
-- **pip**: Usually comes with Python. Verify by running `pip --version`
-- **Virtual Environment**: We recommend using `venv` or `conda` for dependency management
+- **uv**: A fast Python package manager. Install with:
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+  Or on Windows:
+  ```powershell
+  powershell -ExecutionPolicy BypassUser -c "irm https://astral.sh/uv/install.ps1 | iex"
+  ```
+  Or via pip/conda:
+  ```bash
+  pip install uv
+  # or
+  conda install -c conda-forge uv
+  ```
 
 ### Step 1: Clone the Repository
 
@@ -28,39 +40,40 @@ If the repository has git submodules (such as the `src/txtai` submodule), initia
 git submodule update --init --recursive
 ```
 
-### Step 2: Create a Virtual Environment
+### Step 2: Install Dependencies with uv
 
-It's best practice to create an isolated Python environment for this project:
+The project uses `uv` for fast and reliable dependency management. Install all dependencies in one command:
 
-**Using venv:**
 ```bash
-python -m venv venv
+uv sync
+```
 
+This will:
+- Create a virtual environment automatically (if one doesn't exist)
+- Install all project dependencies
+- Create a `uv.lock` file for reproducible builds
+
+**Optional**: To install development dependencies as well:
+```bash
+uv sync --all-extras
+```
+
+### Step 3: Activate the Virtual Environment (Optional)
+
+If you want to manually activate the virtual environment created by `uv`:
+
+```bash
 # On macOS/Linux:
-source venv/bin/activate
+source .venv/bin/activate
 
 # On Windows:
-venv\Scripts\activate
+.venv\Scripts\activate
 ```
 
-**Using conda:**
+However, you can also run commands directly with `uv`:
 ```bash
-conda create -n aiplatform python=3.8
-conda activate aiplatform
-```
-
-### Step 3: Install Dependencies
-
-Install all required dependencies from `requirements.txt`:
-
-```bash
-pip install -r requirements.txt
-```
-
-To upgrade pip before installing dependencies (recommended):
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
+uv run python --version
+uv run pytest tests/
 ```
 
 ### Step 4: Verify Installation
@@ -68,7 +81,11 @@ pip install -r requirements.txt
 To verify that everything is set up correctly, you can run the test suite:
 
 ```bash
-python -m pytest tests/
+# Using uv directly (recommended)
+uv run pytest tests/
+
+# Or if you've activated the venv
+pytest tests/
 ```
 
 ## Project Structure
@@ -105,7 +122,7 @@ The AI Platform consists of several key components:
 
 3. Run tests to ensure nothing is broken:
    ```bash
-   python -m pytest tests/ -v
+   uv run pytest tests/ -v
    ```
 
 ### Committing Your Work
@@ -137,7 +154,51 @@ The project uses the following key dependencies:
 - **pytest**: Testing framework
 - **requests**: HTTP client library
 
-For a complete list, see `requirements.txt`.
+For a complete list, see `pyproject.toml` and `uv.lock`.
+
+## Common uv Commands
+
+### Installing Dependencies
+```bash
+# Install all dependencies
+uv sync
+
+# Install with development dependencies
+uv sync --all-extras
+
+# Sync and update lock file
+uv sync --upgrade
+```
+
+### Running Commands
+```bash
+# Run a Python script
+uv run python script.py
+
+# Run pytest
+uv run pytest tests/
+
+# Run with specific Python version
+uv run --python 3.10 python script.py
+```
+
+### Adding New Dependencies
+```bash
+# Add a new package to dependencies
+uv add package-name
+
+# Add a development-only package
+uv add --dev package-name
+
+# Add with specific version
+uv add package-name==1.0.0
+```
+
+### Removing Dependencies
+```bash
+# Remove a package
+uv remove package-name
+```
 
 ## Setting Up for Specific Use Cases
 
@@ -147,10 +208,10 @@ If you want to run Apache Airflow locally:
 
 ```bash
 # Initialize the Airflow database
-airflow db init
+uv run airflow db init
 
 # Create an admin user
-airflow users create \
+uv run airflow users create \
   --username admin \
   --firstname Admin \
   --lastname User \
@@ -158,10 +219,10 @@ airflow users create \
   --email admin@example.com
 
 # Start the Airflow webserver
-airflow webserver --port 8080
+uv run airflow webserver --port 8080
 
 # Start the Airflow scheduler (in another terminal)
-airflow scheduler
+uv run airflow scheduler
 ```
 
 The Airflow web UI will be available at `http://localhost:8080`
@@ -172,16 +233,16 @@ Execute the test suite:
 
 ```bash
 # Run all tests
-python -m pytest tests/
+uv run pytest tests/
 
 # Run tests with verbose output
-python -m pytest tests/ -v
+uv run pytest tests/ -v
 
 # Run specific test file
-python -m pytest tests/test_specific.py
+uv run pytest tests/test_specific.py
 
 # Run tests with coverage report
-pytest --cov=src tests/
+uv run pytest --cov=src tests/
 ```
 
 ## Configuration
@@ -197,28 +258,45 @@ Modify these files according to your data sources and target systems.
 
 ### Common Issues
 
-**1. Virtual environment not activating:**
-- Ensure you're in the project directory
-- Check that the venv folder exists
-- Try recreating the virtual environment
-
-**2. Import errors after installation:**
+**1. uv command not found:**
 ```bash
-# Reinstall all dependencies
-pip install --force-reinstall -r requirements.txt
+# Make sure uv is in your PATH
+uv --version
+
+# If not installed, install it:
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-**3. Submodule issues:**
+**2. Virtual environment issues:**
+```bash
+# Remove the old environment and resync
+rm -rf .venv
+uv sync
+```
+
+**3. Lock file conflicts:**
+```bash
+# Update lock file with latest compatible versions
+uv sync --upgrade
+```
+
+**4. Import errors after installation:**
+```bash
+# Reinstall all dependencies
+uv sync --force-reinstall
+```
+
+**5. Submodule issues:**
 ```bash
 # Ensure submodules are initialized
 git submodule update --init --recursive
 ```
 
-**4. Airflow errors:**
+**6. Airflow errors:**
 ```bash
 # Reset Airflow database
 rm ~/airflow/airflow.db
-airflow db init
+uv run airflow db init
 ```
 
 ## Code Standards
@@ -229,6 +307,22 @@ airflow db init
 - Include type hints where applicable
 - Write unit tests for new functionality
 
+### Running Code Quality Tools
+
+```bash
+# Format code with black
+uv run black src/ tests/
+
+# Sort imports with isort
+uv run isort src/ tests/
+
+# Check code style with flake8
+uv run flake8 src/ tests/
+
+# Type checking with mypy
+uv run mypy src/
+```
+
 ## Getting Help
 
 If you encounter issues or have questions:
@@ -237,6 +331,7 @@ If you encounter issues or have questions:
 2. Review the README.md for project overview
 3. Check the documentation in the `docs/` directory
 4. Open a new GitHub issue with detailed information
+5. Check the [uv documentation](https://docs.astral.sh/uv/)
 
 ## License
 
